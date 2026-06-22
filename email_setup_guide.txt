@@ -1,0 +1,82 @@
+# 구글 앱스 스크립트(GAS)를 이용한 개인 Gmail 무료 전송 연동 가이드
+
+본 웹 프로그램은 개인용 스마트폰이나 PC 브라우저 내에서 100% 동작하는 '서버리스(Serverless)' 프로그램입니다.
+개인의 일반 Gmail 계정을 통해 엑셀 및 사진 압축파일(ZIP)을 무제한 무료로 자동 이메일 발송하기 위해 아래의 간단한 구글 연동 설정을 권장합니다.
+
+---
+
+## 1단계. 구글 앱스 스크립트 생성 및 코드 입력
+
+1. 웹 브라우저를 열고 구글 계정으로 로그인합니다.
+2. **구글 앱스 스크립트 대시보드** (https://script.google.com/) 로 접속합니다.
+3. 좌측 상단의 **[새 프로젝트]** 버튼을 클릭합니다.
+4. 기존의 `코드.gs`에 들어있는 내용을 지우고, 아래의 전체 코드를 복사하여 붙여넣습니다.
+
+```javascript
+// Google Apps Script Code (붙여넣을 코드)
+function doPost(e) {
+  try {
+    // 1. 전송받은 JSON 데이터 파싱
+    var data = JSON.parse(e.postData.contents);
+    
+    var recipient = data.recipient;
+    var subject = data.subject;
+    var body = data.body;
+    var attachmentBase64 = data.attachmentBase64;
+    var attachmentName = data.attachmentName;
+    
+    // 2. Base64로 인코딩된 ZIP 파일을 바이너리 Blob으로 디코딩
+    var decoded = Utilities.base64Decode(attachmentBase64);
+    var attachmentBlob = Utilities.newBlob(decoded, 'application/zip', attachmentName);
+    
+    // 3. 내 Gmail 계정을 통해 메일 발송 (파일 첨부)
+    GmailApp.sendEmail(recipient, subject, body, {
+      attachments: [attachmentBlob]
+    });
+    
+    // 4. 성공 결과 반환
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "success",
+      message: "이메일이 성공적으로 전송되었습니다."
+    })).setMimeType(ContentService.MimeType.JSON);
+    
+  } catch (error) {
+    // 에러 발생 시 반환
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "error",
+      message: error.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+```
+
+5. 상단의 **[프로젝트 이름 변경]** (예: `동산 스마트 사진대지 메일러`)을 하고, 디스켓 모양의 **[저장]** 아이콘을 누릅니다.
+
+---
+
+## 2단계. 웹 앱(Web App)으로 배포 설정
+
+1. 편집기 우측 상단의 **[배포]** -> **[새 배포]** 버튼을 클릭합니다.
+2. 유형 선택 톱니바퀴 아이콘을 누르고 **[웹 앱(Web App)]**을 선택합니다.
+3. 배포 설정 입력:
+   - **설명:** `동산 사진대지 메일러 배포`
+   - **다음 사용자로 실행 (Execute as):** `나(본인의 구글 계정 주소)`
+   - **액세스 권한이 있는 사용자 (Who has access):** **`모든 사용자 (Anyone)`**  <-- ⚠️ 중요: 반드시 '모든 사용자'로 설정해야 웹 앱에서 접근할 수 있습니다.
+4. **[배포]** 버튼을 클릭합니다.
+5. 최초 배포 시 구글 계정 접근 권한 승인 창이 뜹니다.
+   - **[권한 승인]**을 누릅니다.
+   - 본인 구글 계정을 선택합니다.
+   - 경고창("Google에서 이 앱을 검증하지 않았습니다")이 뜨면, 좌측 하단의 **[고급]** 링크를 클릭한 뒤 **`[프로젝트 이름](으)로 이동 (안전하지 않음)`** 링크를 클릭합니다.
+   - **[허용 (Allow)]**을 클릭합니다.
+6. 배포가 완료되면 화면에 **[웹 앱 URL]** 주소가 생성됩니다. 이 주소를 복사합니다.
+   - 예시 형태: `https://script.google.com/macros/s/AKfycby.../exec`
+
+---
+
+## 3단계. 웹 어플리케이션(SheetCraft)에 등록
+
+1. 스마트폰이나 PC에서 제작한 `index.html`을 엽니다.
+2. 하단의 이메일 입력창에 메일 주소를 적고 **[메일 발송]** 버튼을 클릭합니다.
+3. 설정 주소 등록 알림창이 뜨면 **[확인]**을 클릭합니다.
+4. 주소 입력창에 2단계에서 복사한 **[구글 웹 앱 URL]** 주소를 붙여넣고 확인을 누릅니다.
+5. 한 번 등록된 URL은 브라우저(스마트폰) 메모리에 저장되므로, 다음부터는 메일 주소만 입력하고 [메일 발송]을 누르면 백그라운드에서 1초 만에 개인 Gmail 계정으로 자동 전송됩니다.

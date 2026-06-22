@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>동산 스마트 사진대지 & 기본조사서 시스템</title>
+  
+  <!-- Font Styles (Google Fonts) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+  <!-- Pretendard Font CDN (Korean readability) -->
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+
+  <!-- Vanilla CSS Reference -->
+  <link rel="stylesheet" href="style.css?v=20260622_1">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="logo-area">
+        <i data-lucide="layout-grid" class="logo-icon"></i>
+        <h1>SheetCraft <span>AI</span></h1>
+      </div>
+      <div class="status-badge" id="templateStatus">
+        <span class="pulse-dot"></span>
+        <span class="status-text">템플릿 준비 중...</span>
+      </div>
+    </header>
+
+    <!-- Global Progress Bar -->
+    <div class="progress-bar-container">
+      <div class="progress-bar-fill" id="progressBar" style="width: 0%"></div>
+    </div>
+
+    <!-- Main Navigation Tabs -->
+    <nav class="tab-navigation">
+      <button class="tab-btn active" data-tab="tab-survey">
+        <i data-lucide="file-text"></i> 기본조사서
+      </button>
+      <button class="tab-btn" data-tab="tab-items">
+        <i data-lucide="list-ordered"></i> 물건내역 작성
+      </button>
+      <button class="tab-btn" data-tab="tab-photos">
+        <i data-lucide="camera"></i> 사진대지 매칭
+        <span class="badge" id="photoBadge">0</span>
+      </button>
+    </nav>
+
+    <!-- Tab Contents Container -->
+    <main class="tab-content-container">
+      
+      <!-- Tab 1: 기본조사서 -->
+      <section id="tab-survey" class="tab-pane active">
+        <div class="card glass-card">
+          <div class="card-header">
+            <h2><i data-lucide="info"></i> 기본 정보 입력</h2>
+            <p>조사서 양식의 상단 기본사항 및 서명 정보에 대입됩니다.</p>
+          </div>
+          <div class="card-body">
+            <div class="form-grid">
+              <div class="form-group col-span-2">
+                <label for="district_name">사업지구명 (사진 왼쪽 하단 보드판 오버레이)</label>
+                <input type="text" id="district_name" placeholder="예: OO지구 주택재개발사업">
+              </div>
+              <div class="form-group">
+                <label for="owner_name">소유자 (사진대지 연동)</label>
+                <input type="text" id="owner_name" placeholder="소유자 이름 입력">
+              </div>
+              <div class="form-group">
+                <label for="rep_contact">소유자 전화번호</label>
+                <input type="text" id="rep_contact" placeholder="010-0000-0000">
+              </div>
+                            <!-- 소재지 (공통 주소) -->
+              <div class="form-group col-span-2">
+                <label for="location_name">소재지 (공통 지번 주소)</label>
+                <div style="display: flex; gap: 8px;">
+                  <input type="text" id="location_name" placeholder="예: OO동 OOO-OOO" style="flex: 1;">
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="openAddressSearch('location')">주소 검색</button>
+                </div>
+              </div>
+
+              <!-- 송달주소 -->
+              <div class="form-group col-span-2">
+                <label for="rep_addr">송달주소 (공통 지번 주소)</label>
+                <div style="display: flex; gap: 8px;">
+                  <input type="text" id="rep_addr" placeholder="우편물을 수령할 주소 입력" style="flex: 1;">
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="openAddressSearch('rep')">주소 검색</button>
+                </div>
+              </div>
+
+              <!-- 사업자등록증상 소재지 -->
+              <div class="form-group col-span-2">
+                <label for="biz_location">사업자등록증상 소재지 (지번 주소)</label>
+                <div style="display: flex; gap: 8px;">
+                  <input type="text" id="biz_location" placeholder="사업자등록증상의 소재지 주소 입력" style="flex: 1;">
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="openAddressSearch('biz')">주소 검색</button>
+                </div>
+              </div>
+
+              <!-- 지구외 여부 -->
+              <div class="form-group col-span-2">
+                <label>지구외 여부</label>
+                <label class="checkbox-label-container">
+                  <input type="checkbox" id="out_of_district">
+                  <span class="checkbox-text">지구외 (대상)</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card glass-card">
+          <div class="card-header">
+            <h2><i data-lucide="user-check"></i> 일반사항 및 사업자 정보</h2>
+          </div>
+          <div class="card-body">
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="company_name">상호</label>
+                <input type="text" id="company_name" placeholder="상호명 입력">
+              </div>
+              <div class="form-group">
+                <label for="biz_type">업종</label>
+                <input type="text" id="biz_type" placeholder="업종 입력">
+              </div>
+              <div class="form-group">
+                <label for="rep_name">대표자 성명</label>
+                <input type="text" id="rep_name" placeholder="대표자 성명">
+              </div>
+              <div class="form-group">
+                <label for="rep_jumin">주민등록번호</label>
+                <input type="text" id="rep_jumin" placeholder="000000-0000000">
+              </div>
+
+
+              <div class="form-group">
+                <label for="biz_reg_no">사업자등록번호</label>
+                <input type="text" id="biz_reg_no" placeholder="000-00-00000">
+              </div>
+              <div class="form-group">
+                <label for="corp_reg_no">법인등록번호</label>
+                <input type="text" id="corp_reg_no" placeholder="000000-0000000">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card glass-card">
+          <div class="card-header">
+            <h2><i data-lucide="image"></i> 현장 전경 또는 평면도 사진</h2>
+            <p>기본조사서 중간 평면도 칸(C16:AD20)에 자동 삽입되는 사진입니다.</p>
+          </div>
+          <div class="card-body">
+            <div class="image-upload-box" id="surveyPhotoBox">
+              <input type="file" id="survey_photo" accept="image/*" class="file-input">
+              <div class="upload-placeholder">
+                <i data-lucide="image-plus" class="upload-icon"></i>
+                <p>터치하여 촬영하거나 사진 업로드</p>
+                <span>(현장 전경 또는 평면도 이미지)</span>
+              </div>
+              <div class="preview-container hidden">
+                <img id="surveyPhotoPreview" src="" alt="평면도 미리보기">
+                <button type="button" class="btn-remove-photo" id="btnRemoveSurveyPhoto">
+                  <i data-lucide="trash-2"></i> 삭제
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card glass-card">
+          <div class="card-header">
+            <h2><i data-lucide="clipboard-list"></i> 특기사항</h2>
+          </div>
+          <div class="card-body">
+            <div class="form-group">
+              <textarea id="special_notes" rows="4" placeholder="조사 시 특기사항이나 메모를 입력하세요..."></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="card glass-card">
+          <div class="card-header">
+            <h2><i data-lucide="pen-tool"></i> 서명 정보</h2>
+            <p>조사 보고서 하단에 서명되는 조사자와 입회자 명단입니다.</p>
+          </div>
+          <div class="card-body">
+            <div class="form-grid-3">
+              <div class="form-group">
+                <label for="surveyor_name">조사자 성명</label>
+                <input type="text" id="surveyor_name" placeholder="조사자 이름 입력">
+              </div>
+              <div class="form-group">
+                <label for="witness_name">입회자 성명</label>
+                <input type="text" id="witness_name" placeholder="입회자 이름 입력">
+              </div>
+              <div class="form-group">
+                <label for="surveyor_date">조사일자</label>
+                <input type="text" id="surveyor_date" placeholder="예: 2026-06-22">
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 2: 물건내역 작성 -->
+      <section id="tab-items" class="tab-pane">
+        <div class="card glass-card">
+          <div class="card-header">
+            <h2><i data-lucide="list-ordered"></i> 지장물 / 물건 내역 목록</h2>
+            <p>여기에 작성된 행 목록이 사진대지(탭3) 카드 목록 및 물건내역 시트로 자동 매핑됩니다.</p>
+          </div>
+          <div class="card-body">
+            <div class="item-cards-list" id="itemCardsList">
+              <!-- Item cards will be dynamically loaded here -->
+            </div>
+            <div class="table-add-trigger" id="tableAddTrigger">
+              <i data-lucide="plus-circle"></i>
+              <span>➕ 터치하여 새로운 지장물 항목 추가</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 3: 사진대지 매칭 -->
+      <section id="tab-photos" class="tab-pane">
+        <div class="alert-info-box">
+          <i data-lucide="info"></i>
+          <p><strong>[물건내역] 탭</strong>에 입력된 항목 순서대로 자동으로 사진 매칭 카드가 생성됩니다. 엑셀 다운로드 시 순서대로 배치됩니다.</p>
+        </div>
+        
+        <div class="photo-cards-grid" id="photoCardsGrid">
+          <!-- Photo Cards will be dynamically inserted here -->
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Bottom Actions Panel (Collapsible Bottom Sheet) -->
+    <footer class="actions-panel glass-card" id="actionsPanel">
+      <div class="panel-header" id="panelHeader">
+        <div class="panel-title">
+          <i data-lucide="download-cloud"></i>
+          <span>내보내기 및 파일 다운로드</span>
+        </div>
+        <i data-lucide="chevron-up" class="toggle-icon" id="toggleIcon"></i>
+      </div>
+      <div class="panel-content" id="panelContent">
+        <div class="export-actions-group">
+          <div class="input-with-icon">
+            <i data-lucide="mail"></i>
+            <input type="email" id="emailRecipient" placeholder="전송받을 이메일 주소 입력">
+          </div>
+          <button type="button" class="btn btn-secondary" id="btnSendEmail">
+            <i data-lucide="send"></i> 메일 발송
+          </button>
+          <button type="button" class="btn btn-success" id="btnDownloadZip">
+            <i data-lucide="folder-archive"></i> ZIP 다운로드
+          </button>
+        </div>
+      </div>
+    </footer>
+
+    <!-- Logger Console (Subtle diagnostics) -->
+    <div class="console-log-area" id="loggerConsole">
+      <span class="log-entry">시스템이 초기화되었습니다.</span>
+    </div>
+  </div>
+
+  <!-- Offscreen Canvas for Drawing Board Overlays (Hidden) -->
+  <canvas id="synthesisCanvas" style="display: none;"></canvas>
+
+  <!-- Address Search Modal (Postcode Layer) -->
+  <div id="addressModal" class="address-modal-overlay hidden">
+    <div class="address-modal-container glass-card">
+      <div class="address-modal-header">
+        <h3><i data-lucide="map-pin"></i> 주소 검색</h3>
+        <button type="button" class="btn-close-modal" id="btnCloseAddressModal">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div id="addressLayer" style="width:100%; height:450px; min-height:450px; position:relative; overflow:hidden; border-radius: var(--radius-sm);"></div>
+    </div>
+  </div>
+
+  <!-- External Libraries via CDN -->
+  <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.344.0/dist/umd/lucide.min.js"></script>
+  
+  <!-- Base64 Template Data -->
+  <script src="template_data.js"></script>
+  
+  <!-- Core Logic script -->
+  <script src="app.js?v=20260622_1"></script>
+</body>
+</html>
