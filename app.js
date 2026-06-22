@@ -2618,4 +2618,10 @@ function initDrawingBoard() {
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
   initDrawingBoard();
+  
+  // Prevent accidental page reloads / navigation data loss
+  window.addEventListener('beforeunload', (e) => {
+    e.preventDefault();
+    e.returnValue = ''; // Required for Chrome/Safari to display dialog
+  });
 });
