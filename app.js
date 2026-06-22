@@ -23,7 +23,13 @@ let db = {
     photo: '', // Base64 of Site Panorama / Floor Plan
     district: '', // Project District Name (Bottom Left Overlay)
     bizLocation: '', // Address on Business Registration
-    outOfDistrict: false // Out of District Status
+    outOfDistrict: false, // Out of District Status
+    itemLocation: '',
+    hasLedger: false,
+    isBusiness: false,
+    isResidence: false,
+    rentType: '자가',
+    permitNotes: ''
   },
   items: [] // List of items/objects (Tab 2)
 };
@@ -109,6 +115,13 @@ function formatJumin(val) {
   return val.slice(0, 6) + '-' + val.slice(6, 13);
 }
 
+function formatDate(val) {
+  val = val.replace(/[^0-9]/g, '');
+  if (val.length <= 4) return val;
+  if (val.length <= 6) return val.slice(0, 4) + '-' + val.slice(4);
+  return val.slice(0, 4) + '-' + val.slice(4, 6) + '-' + val.slice(6, 8);
+}
+
 function formatPhone(val) {
   val = val.replace(/[^0-9]/g, '');
   if (val.startsWith('02')) {
@@ -184,9 +197,28 @@ function getDefaultItemDesc(item) {
   return desc.trim();
 }
 
+function getCompositeItemDesc(item) {
+  let name = item.customName !== undefined ? item.customName : (item.name || '');
+  let qty = item.customQty !== undefined ? item.customQty : (item.qty || '');
+  let unit = item.customUnit !== undefined ? item.customUnit : (item.unit || '');
+  let specs = item.customSpecs !== undefined ? item.customSpecs : (item.specs || '');
+  
+  let desc = name;
+  if (qty) {
+    desc += ` ${qty}`;
+    if (unit) {
+      desc += unit;
+    }
+  }
+  if (specs) {
+    desc += ` (${specs})`;
+  }
+  return desc.trim();
+}
+
 // Initialize Application
 window.addEventListener('DOMContentLoaded', async () => {
-  log('SheetCraft AI 초기화 중...');
+  log('디지털 기본조사서 초기화 중...');
   lucide.createIcons();
   
   // Set default date to today
@@ -226,7 +258,10 @@ window.addEventListener('DOMContentLoaded', async () => {
     { id: 'corp_reg_no', key: 'corpRegNo' },
     { id: 'special_notes', key: 'notes' },
     { id: 'district_name', key: 'district' },
-    { id: 'biz_location', key: 'bizLocation' }
+    { id: 'biz_location', key: 'bizLocation' },
+    { id: 'item_location', key: 'itemLocation' },
+    { id: 'rent_type', key: 'rentType' },
+    { id: 'permit_notes', key: 'permitNotes' }
   ];
 
   surveyInputs.forEach(inputInfo => {
@@ -248,6 +283,9 @@ window.addEventListener('DOMContentLoaded', async () => {
           e.target.value = val;
         } else if (inputInfo.key === 'corpRegNo') {
           val = formatCorpNo(val);
+          e.target.value = val;
+        } else if (inputInfo.key === 'date') {
+          val = formatDate(val);
           e.target.value = val;
         }
         
@@ -282,6 +320,28 @@ window.addEventListener('DOMContentLoaded', async () => {
   if (outOfDistrictEl) {
     outOfDistrictEl.addEventListener('change', (e) => {
       db.survey.outOfDistrict = e.target.checked;
+    });
+  }
+
+  // Bind new global checkboxes
+  const hasLedgerEl = document.getElementById('has_ledger');
+  if (hasLedgerEl) {
+    hasLedgerEl.addEventListener('change', (e) => {
+      db.survey.hasLedger = e.target.checked;
+    });
+  }
+
+  const isBusinessEl = document.getElementById('is_business');
+  if (isBusinessEl) {
+    isBusinessEl.addEventListener('change', (e) => {
+      db.survey.isBusiness = e.target.checked;
+    });
+  }
+
+  const isResidenceEl = document.getElementById('is_residence');
+  if (isResidenceEl) {
+    isResidenceEl.addEventListener('change', (e) => {
+      db.survey.isResidence = e.target.checked;
     });
   }
 
@@ -343,120 +403,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     log(`내보내기 패널 ${isExpanded ? '열림' : '닫힘'}`);
   });
 
-  // Address Modal close event
-  const btnCloseModal = document.getElementById('btnCloseAddressModal');
-  const addressModal = document.getElementById('addressModal');
-  if (btnCloseModal && addressModal) {
-    btnCloseModal.addEventListener('click', () => {
-      addressModal.classList.add('hidden');
-    });
-  }
 });
-
-// Kakao Address Search Integration
-window.openAddressSearch = function(type) {
-  if (typeof daum === 'undefined' || !daum.Postcode) {
-    log('우편번호 서비스 라이브러리가 로드되지 않았습니다.', 'error');
-    alert('우편번호 검색 서비스를 이용할 수 없습니다. 인터넷 연결을 확인해 주세요.');
-    return;
-  }
-  
-  const modal = document.getElementById('addressModal');
-  const layer = document.getElementById('addressLayer');
-  if (!modal || !layer) {
-    log('주소 검색 모달 요소를 찾을 수 없습니다.', 'error');
-    return;
-  }
-  
-  // Show the modal overlay
-  modal.classList.remove('hidden');
-  
-  new daum.Postcode({
-    oncomplete: function(data) {
-      try {
-        if (!data) {
-          log('주소 데이터가 빈 값입니다.', 'error');
-          return;
-        }
-        log(`주소 데이터 수신 완료: ${data.address}`);
-        
-        // Determine Jibun Address (fallbacks)
-        const jibunAddr = data.jibunAddress || data.autoJibunAddress || data.address;
-        
-        // Helper to safely update input and dispatch input event
-        const safeUpdateInput = (id, val) => {
-          const el = document.getElementById(id);
-          if (el) {
-            el.value = val || '';
-            try {
-              // Create and dispatch event safely (compatible with older webviews)
-              let event;
-              if (typeof Event === 'function') {
-                try {
-                  event = new Event('input', { bubbles: true });
-                } catch (e) {
-                  event = document.createEvent('Event');
-                  event.initEvent('input', true, true);
-                }
-              } else {
-                event = document.createEvent('Event');
-                event.initEvent('input', true, true);
-              }
-              el.dispatchEvent(event);
-            } catch (eventErr) {
-              log(`이벤트 디스패치 실패 (${id}): ${eventErr.message}`, 'warning');
-            }
-          }
-        };
-        
-        if (type === 'location') {
-          // Direct State Writes (Redundancy 1)
-          const oldLocation = db.survey.location;
-          db.survey.location = jibunAddr;
-          
-          // DOM UI Updates & Event dispatching (Redundancy 2)
-          safeUpdateInput('location_name', jibunAddr);
-          
-          // Tab 2 & Tab 3 Sync Redundancy (Redundancy 3)
-          try {
-            db.items.forEach(item => {
-              if (!item.location || item.location === oldLocation || item.location === '') {
-                item.location = jibunAddr;
-                const cardEl = document.getElementById(`item-card-${item.id}`);
-                if (cardEl) {
-                  const locInput = cardEl.querySelector('.cell-location');
-                  if (locInput) locInput.value = jibunAddr;
-                }
-              }
-            });
-            syncSurveyHeadersToPhotos();
-          } catch (syncErr) {
-            log(`상세 동기화 실패: ${syncErr.message}`, 'warning');
-          }
-          
-        } else if (type === 'rep') {
-          db.survey.repAddr = jibunAddr;
-          safeUpdateInput('rep_addr', jibunAddr);
-          
-        } else if (type === 'biz') {
-          db.survey.bizLocation = jibunAddr;
-          safeUpdateInput('biz_location', jibunAddr);
-        }
-        
-        log(`주소 자동 기입 완료 (${type}): ${jibunAddr}`);
-      } catch (err) {
-        log(`주소 기입 중 오류 발생: ${err.message}`, 'error');
-        alert(`주소 기입 중 오류가 발생했습니다: ${err.message}`);
-      } finally {
-        // Hide the modal after completion
-        modal.classList.add('hidden');
-      }
-    },
-    width: '100%',
-    height: '100%',
-    maxSuggestItems: 5
-  }).embed(layer);
-};
 
 // Dynamic Row addition (Item Form Card) (Tab 2)
 let rowIdCounter = 0;
@@ -501,9 +448,7 @@ function addTableDataRow() {
   card.innerHTML = `
     <div class="item-card-header">
       <span class="item-num">물건 #${itemIndex}</span>
-      <button type="button" class="btn-danger-icon btn-delete-item">
-        <i data-lucide="trash-2"></i>
-      </button>
+      <button type="button" class="btn-text-danger btn-delete-item">삭제</button>
     </div>
     <div class="item-card-body">
       <!-- Line 1: 유형 | 명 | 수량 | 단위 -->
@@ -711,15 +656,25 @@ function syncItemData(id) {
     const titleEl = cardElement.querySelector('.photo-card-title');
     titleEl.innerText = `${item.type || '미지정'} - ${item.name || '미입력'} [${item.specs || '규격 없음'}]`;
     
-    // Sync to card-specs input box in Tab 3 if not customized
+    // Sync to card inputs in Tab 3 if not customized
+    const nameInput = cardElement.querySelector('.card-name');
+    if (nameInput && item.customName === undefined) {
+      nameInput.value = item.name || '';
+    }
+    const qtyInput = cardElement.querySelector('.card-qty');
+    if (qtyInput && item.customQty === undefined) {
+      qtyInput.value = item.qty || '';
+    }
+    const unitInput = cardElement.querySelector('.card-unit');
+    if (unitInput && item.customUnit === undefined) {
+      unitInput.value = item.unit || '';
+    }
     const specsInput = cardElement.querySelector('.card-specs');
     if (specsInput && item.customSpecs === undefined) {
-      specsInput.value = getDefaultItemDesc(item);
+      specsInput.value = item.specs || '';
     }
-    
-    // Sync to card-location input box in Tab 3 directly (readonly)
     const locInput = cardElement.querySelector('.card-location');
-    if (locInput) {
+    if (locInput && item.customLocation === undefined) {
       locInput.value = item.location || db.survey.location || '';
     }
     
@@ -742,13 +697,13 @@ function syncSurveyHeadersToPhotos() {
     const cardEl = document.querySelector(`.photo-card[data-item-id="${item.id}"]`);
     if (cardEl) {
       const locInput = cardEl.querySelector('.card-location');
-      if (locInput) {
+      if (locInput && item.customLocation === undefined) {
         locInput.value = item.location || db.survey.location || '';
       }
       
       const ownerInput = cardEl.querySelector('.card-owner');
       if (ownerInput && item.customOwner === undefined) {
-        ownerInput.value = db.survey.owner;
+        ownerInput.value = db.survey.owner || '';
       }
     }
     
@@ -798,21 +753,14 @@ function updatePhotoCards() {
       <div class="photo-card-body">
         <!-- Photo input/preview col -->
         <div class="photo-card-photo-col">
-          <div class="composite-preview-wrapper" id="preview-wrapper-${item.id}">
+          <div class="composite-preview-wrapper ${item.compositeImage ? '' : 'hidden'}" id="preview-wrapper-${item.id}">
             ${item.compositeImage ? 
               `<img src="data:image/jpeg;base64,${item.compositeImage}" alt="합성 이미지 미리보기">` : 
-              `<div class="no-photo-placeholder">
-                <i data-lucide="camera-off"></i>
-                <span>등록된 사진이 없습니다</span>
-              </div>`
+              ''
             }
           </div>
-          <div class="image-upload-box" style="min-height: 48px; padding: 6px;">
+          <div class="card-file-input-container" style="margin-top: 4px;">
             <input type="file" class="card-file-input" accept="image/*" data-item-id="${item.id}">
-            <div class="upload-placeholder" style="flex-direction: row; gap: 6px; padding: 0;">
-              <i data-lucide="camera" style="width: 18px; height: 18px;"></i>
-              <span style="font-weight: bold; font-size: 13px;">사진 촬영 / 업로드</span>
-            </div>
           </div>
         </div>
         
@@ -826,19 +774,35 @@ function updatePhotoCards() {
             </label>
           </div>
           
-          <div class="form-group">
-            <label>소재지 (물건내역 연동)</label>
-            <input type="text" class="card-location" data-item-id="${item.id}" value="${item.location || db.survey.location || ''}" readonly style="background: rgba(255, 255, 255, 0.02); color: var(--text-secondary); cursor: not-allowed;" placeholder="소재지 입력">
+          <div class="form-grid" style="gap: 10px;">
+            <div class="form-group">
+              <label>소재지 (물건내역 연동)</label>
+              <input type="text" class="card-location" data-item-id="${item.id}" value="${item.customLocation !== undefined ? item.customLocation : (item.location || db.survey.location || '')}" placeholder="소재지 입력">
+            </div>
+            <div class="form-group">
+              <label>소유자 (기본조사서 연동)</label>
+              <input type="text" class="card-owner" data-item-id="${item.id}" value="${item.customOwner !== undefined ? item.customOwner : (db.survey.owner || '')}" placeholder="소유자 입력">
+            </div>
           </div>
-          
-          <div class="form-group">
-            <label>물건내용 (물건내역 연동)</label>
-            <input type="text" class="card-specs" data-item-id="${item.id}" value="${item.customSpecs !== undefined ? item.customSpecs : getDefaultItemDesc(item)}" placeholder="물건내용 입력">
+
+          <div class="form-grid" style="grid-template-columns: 2fr 1fr 1fr; gap: 10px;">
+            <div class="form-group">
+              <label>물건명</label>
+              <input type="text" class="card-name" data-item-id="${item.id}" value="${item.customName !== undefined ? item.customName : (item.name || '')}" placeholder="물건명">
+            </div>
+            <div class="form-group">
+              <label>수량</label>
+              <input type="text" class="card-qty" data-item-id="${item.id}" value="${item.customQty !== undefined ? item.customQty : (item.qty || '')}" placeholder="수량" style="text-align: right;">
+            </div>
+            <div class="form-group">
+              <label>단위</label>
+              <input type="text" class="card-unit" data-item-id="${item.id}" value="${item.customUnit !== undefined ? item.customUnit : (item.unit || '')}" placeholder="단위">
+            </div>
           </div>
-          
+
           <div class="form-group">
-            <label>소유자 (기본조사서 연동)</label>
-            <input type="text" class="card-owner" data-item-id="${item.id}" value="${item.customOwner !== undefined ? item.customOwner : (db.survey.owner || '')}" placeholder="소유자 입력">
+            <label>구조 및 규격</label>
+            <input type="text" class="card-specs" data-item-id="${item.id}" value="${item.customSpecs !== undefined ? item.customSpecs : (item.specs || '')}" placeholder="구조 및 규격 입력">
           </div>
         </div>
       </div>
@@ -850,8 +814,11 @@ function updatePhotoCards() {
     const fileInput = card.querySelector('.card-file-input');
     const overlayToggle = card.querySelector('.toggle-overlay');
     const locInput = card.querySelector('.card-location');
-    const specsInput = card.querySelector('.card-specs');
     const ownerInput = card.querySelector('.card-owner');
+    const nameInput = card.querySelector('.card-name');
+    const qtyInput = card.querySelector('.card-qty');
+    const unitInput = card.querySelector('.card-unit');
+    const specsInput = card.querySelector('.card-specs');
     
     fileInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
@@ -877,8 +844,8 @@ function updatePhotoCards() {
       }
     });
     
-    specsInput.addEventListener('input', (e) => {
-      item.customSpecs = e.target.value;
+    locInput.addEventListener('input', (e) => {
+      item.customLocation = e.target.value;
       if (item.image && item.overlayEnabled) {
         drawCompositeImage(item);
       }
@@ -886,6 +853,34 @@ function updatePhotoCards() {
     
     ownerInput.addEventListener('input', (e) => {
       item.customOwner = e.target.value;
+      if (item.image && item.overlayEnabled) {
+        drawCompositeImage(item);
+      }
+    });
+
+    nameInput.addEventListener('input', (e) => {
+      item.customName = e.target.value;
+      if (item.image && item.overlayEnabled) {
+        drawCompositeImage(item);
+      }
+    });
+
+    qtyInput.addEventListener('input', (e) => {
+      item.customQty = e.target.value;
+      if (item.image && item.overlayEnabled) {
+        drawCompositeImage(item);
+      }
+    });
+
+    unitInput.addEventListener('input', (e) => {
+      item.customUnit = e.target.value;
+      if (item.image && item.overlayEnabled) {
+        drawCompositeImage(item);
+      }
+    });
+    
+    specsInput.addEventListener('input', (e) => {
+      item.customSpecs = e.target.value;
       if (item.image && item.overlayEnabled) {
         drawCompositeImage(item);
       }
@@ -928,11 +923,11 @@ function drawCompositeImage(item) {
       const distY = canvas.height - tableHeight - margin;
       
       // 1. Draw Table Background
-      ctx.fillStyle = 'rgba(10, 15, 28, 0.85)';
+      ctx.fillStyle = '#ffffff';
       ctx.fillRect(distX, distY, tableWidth, tableHeight);
       
       // 2. Draw Table Borders and Grid Lines
-      ctx.strokeStyle = '#38bdf8'; // Sky blue border
+      ctx.strokeStyle = '#000000'; // Black border
       ctx.lineWidth = Math.max(canvas.width * 0.003, 3);
       ctx.strokeRect(distX, distY, tableWidth, tableHeight);
       
@@ -958,12 +953,8 @@ function drawCompositeImage(item) {
       const labels = ['사업지구명', '소 재 지', '물건내용', '소 유 자', '조사일자'];
       
       const districtVal = db.survey.district || '';
-      const locationVal = item.location || db.survey.location || '';
-      
-      // Default description: name qty unit (specs)
-      const defaultDesc = getDefaultItemDesc(item);
-      const descVal = item.customSpecs !== undefined ? item.customSpecs : defaultDesc;
-      
+      const locationVal = item.customLocation !== undefined ? item.customLocation : (item.location || db.survey.location || '');
+      const descVal = getCompositeItemDesc(item);
       const ownerVal = item.customOwner !== undefined ? item.customOwner : (db.survey.owner || '');
       const dateVal = db.survey.date || new Date().toISOString().split('T')[0];
       
@@ -973,13 +964,13 @@ function drawCompositeImage(item) {
       for (let i = 0; i < 5; i++) {
         const rowY = distY + (rowHeight * i) + (rowHeight / 2);
         
-        // Draw Label (Teal highlighted)
-        ctx.fillStyle = '#38bdf8';
+        // Draw Label (Black)
+        ctx.fillStyle = '#000000';
         ctx.textAlign = 'center';
         ctx.fillText(labels[i], distX + (labelsColWidth / 2), rowY);
         
-        // Draw Value (White) with clipping to prevent overflow
-        ctx.fillStyle = '#f8fafc';
+        // Draw Value (Black) with clipping to prevent overflow
+        ctx.fillStyle = '#000000';
         ctx.textAlign = 'left';
         ctx.save();
         ctx.beginPath();
@@ -998,6 +989,7 @@ function drawCompositeImage(item) {
     const previewWrapper = document.getElementById(`preview-wrapper-${item.id}`);
     if (previewWrapper) {
       previewWrapper.innerHTML = `<img src="data:image/jpeg;base64,${compositeBase64}" alt="합성 이미지 미리보기">`;
+      previewWrapper.classList.remove('hidden');
     }
   };
 }
@@ -1031,51 +1023,104 @@ async function generateExcelBuffer() {
       } catch (e) {}
     });
     
-    // Insert new row for '사업자등록증상 소재지' and '지구외 여부'
-    wsSurvey.insertRow(14, [], 'i');
-    wsSurvey.insertRow(15, [], 'i');
+    // Insert new rows (16 to 23, total 8 rows)
+    for (let i = 0; i < 8; i++) {
+      wsSurvey.insertRow(16 + i, [], 'i');
+    }
+
+    // Copy style from Row 14 and 15
+    const templateRow14 = wsSurvey.getRow(14);
+    const templateRow15 = wsSurvey.getRow(15);
     
-    // Copy style from shifted Row 16 and 17 to new Row 14 and 15
-    const templateRow16 = wsSurvey.getRow(16);
-    const templateRow17 = wsSurvey.getRow(17);
-    const newRow14 = wsSurvey.getRow(14);
-    const newRow15 = wsSurvey.getRow(15);
-    
-    newRow14.height = templateRow16.height;
-    newRow15.height = templateRow17.height;
-    
-    for (let col = 1; col <= 30; col++) {
-      newRow14.getCell(col).style = templateRow16.getCell(col).style;
-      newRow15.getCell(col).style = templateRow17.getCell(col).style;
+    for (let i = 0; i < 8; i += 2) {
+      const newRow1 = wsSurvey.getRow(16 + i);
+      const newRow2 = wsSurvey.getRow(17 + i);
+      newRow1.height = templateRow14.height;
+      newRow2.height = templateRow15.height;
+      for (let col = 1; col <= 30; col++) {
+        newRow1.getCell(col).style = templateRow14.getCell(col).style;
+        newRow2.getCell(col).style = templateRow15.getCell(col).style;
+      }
+    }
+
+    const headerStyle = wsSurvey.getCell('C14').style;
+    const valueStyle = wsSurvey.getCell('F14').style;
+
+    // Apply specific styles for new rows to match the horizontal layout
+    for (let r = 16; r <= 19; r++) {
+      for (let c = 3; c <= 5; c++) {
+        wsSurvey.getCell(r, c).fill = headerStyle.fill;
+        wsSurvey.getCell(r, c).font = headerStyle.font;
+        wsSurvey.getCell(r, c).alignment = { vertical: 'middle', horizontal: 'center' };
+      }
+      for (let c = 6; c <= 30; c++) {
+        wsSurvey.getCell(r, c).fill = valueStyle.fill;
+        wsSurvey.getCell(r, c).font = valueStyle.font;
+        wsSurvey.getCell(r, c).alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+      }
+    }
+
+    for (let r = 20; r <= 21; r++) {
+      for (let c = 3; c <= 30; c++) {
+        wsSurvey.getCell(r, c).fill = headerStyle.fill;
+        wsSurvey.getCell(r, c).font = headerStyle.font;
+        wsSurvey.getCell(r, c).alignment = { vertical: 'middle', horizontal: 'center' };
+      }
+    }
+    for (let r = 22; r <= 23; r++) {
+      for (let c = 3; c <= 30; c++) {
+        wsSurvey.getCell(r, c).fill = valueStyle.fill;
+        wsSurvey.getCell(r, c).font = valueStyle.font;
+        wsSurvey.getCell(r, c).alignment = { vertical: 'middle', horizontal: 'center' };
+      }
     }
     
     // Re-merge ranges with shifted coords
     const mergeList = [
-      'A6:B17', // expanded
-      'C14:E15', 'F14:P15', 'Q14:T15', 'U14:AD15', // new row
-      'C16:E17', 'F16:P17', 'Q16:T17', 'U16:AD17', // shifted Row 14 (original)
-      'A18:B22', 'C18:AD22', // shifted Row 16
-      'A23:B26', 'C23:AD26', // shifted Row 21
-      'A28:N31', 'O28:AD29', 'O30:AD31' // shifted Row 26+
+      'A6:B23', // expanded sidebar (Rows 6 to 23 is 18 rows)
+      'C14:E15', 'F14:P15', 'Q14:T15', 'U14:AD15', // 사업자등록번호 / 법인등록번호 (Original)
+      
+      // New rows based on '기본조사서 참고용' layout
+      'C16:E17', 'F16:AD17', // 사업자등록증상 소재지
+      'C18:E19', 'F18:AD19', // 물건소재지
+      
+      // Booleans Headers
+      'C20:E21', 'F20:I21', 'J20:N21', 'O20:S21', 'T20:W21', 'X20:AD21',
+      
+      // Booleans Values
+      'C22:E23', 'F22:I23', 'J22:N23', 'O22:S23', 'T22:W23', 'X22:AD23',
+      
+      'A24:B28', 'C24:AD28', // 평면도 (shifted by 8 rows total)
+      'A29:B32', 'C29:AD32', // 특기사항
+      'A34:N37', 'O34:AD35', 'O36:AD37' // 조사일자, 조사자, 입회자
     ];
     mergeList.forEach(rng => {
-      try {
-        wsSurvey.mergeCells(rng);
-      } catch (e) {}
+      try { wsSurvey.mergeCells(rng); } catch (e) {}
     });
     
     // Write new fields
-    wsSurvey.getCell('C14').value = '사업자등록증상 소재지';
-    const bizVal = db.survey.bizLocation || '';
-    const cellF14 = wsSurvey.getCell('F14');
-    cellF14.value = bizVal;
-    cellF14.alignment = Object.assign({}, cellF14.alignment, { wrapText: true, vertical: 'middle' });
+    wsSurvey.getCell('C16').value = '사업자등록증상 소재지';
+    wsSurvey.getCell('F16').value = db.survey.bizLocation || '';
     
-    wsSurvey.getCell('Q14').value = '지구외 여부';
-    wsSurvey.getCell('U14').value = db.survey.outOfDistrict ? 'O' : '';
-    wsSurvey.getCell('U14').alignment = { vertical: 'middle', horizontal: 'center' };
+    wsSurvey.getCell('C18').value = '물건소재지';
+    wsSurvey.getCell('F18').value = db.survey.itemLocation || '';
     
-    // Write original survey values to their shifted cells
+    wsSurvey.getCell('C20').value = '지구외 여부';
+    wsSurvey.getCell('F20').value = '자가/임차';
+    wsSurvey.getCell('J20').value = '건축물대장 유무';
+    wsSurvey.getCell('O20').value = '영업장 여부';
+    wsSurvey.getCell('T20').value = '거주 여부';
+    wsSurvey.getCell('X20').value = '기타허가사항';
+    
+    wsSurvey.getCell('C22').value = db.survey.outOfDistrict ? 'Y' : 'N';
+    wsSurvey.getCell('F22').value = db.survey.rentType || '';
+    wsSurvey.getCell('J22').value = db.survey.hasLedger ? 'Y' : 'N';
+    wsSurvey.getCell('O22').value = db.survey.isBusiness ? 'Y' : 'N';
+    wsSurvey.getCell('T22').value = db.survey.isResidence ? 'Y' : 'N';
+    wsSurvey.getCell('X22').value = db.survey.permitNotes || '';
+    wsSurvey.getCell('X22').alignment = Object.assign({}, wsSurvey.getCell('X22').alignment, { wrapText: true, horizontal: 'left' });
+
+    // Write original survey values
     wsSurvey.getCell('F6').value = db.survey.company || '';
     wsSurvey.getCell('S6').value = db.survey.bizType || '';
     
@@ -1094,12 +1139,14 @@ async function generateExcelBuffer() {
     
     wsSurvey.getCell('U12').value = db.survey.repContact || '';
     
-    // Shifted down by 2 rows
-    wsSurvey.getCell('F16').value = db.survey.bizRegNo || '';
-    wsSurvey.getCell('U16').value = db.survey.corpRegNo || '';
-    wsSurvey.getCell('C23').value = db.survey.notes || '';
+    // (Original row 14)
+    wsSurvey.getCell('F14').value = db.survey.bizRegNo || '';
+    wsSurvey.getCell('U14').value = db.survey.corpRegNo || '';
+
+    // Shifted down by 8 rows total (below Row 18)
+    wsSurvey.getCell('C29').value = db.survey.notes || '';
     
-    // Date formatter shifted down by 2 rows (A26 -> A28)
+    // Date formatter shifted down by 8 rows (A26 -> A34)
     if (db.survey.date) {
       const dateStr = db.survey.date.trim();
       const match = dateStr.match(/^(\d{4})[-.\/](\d{1,2})[-.\/](\d{1,2})$/);
@@ -1107,25 +1154,25 @@ async function generateExcelBuffer() {
         const year = match[1];
         const month = match[2].padStart(2, '0');
         const day = match[3].padStart(2, '0');
-        wsSurvey.getCell('A28').value = `○ 조사일자 :   ${year}.   ${month}.   ${day}.   (사진촬영인)`;
+        wsSurvey.getCell('A34').value = `○ 조사일자 :   ${year}.   ${month}.   ${day}.   (사진촬영인)`;
       } else {
-        wsSurvey.getCell('A28').value = `○ 조사일자 : ${dateStr}   (사진촬영인)`;
+        wsSurvey.getCell('A34').value = `○ 조사일자 : ${dateStr}   (사진촬영인)`;
       }
     }
     
-    // Signatures shifted down by 2 rows
-    wsSurvey.getCell('O28').value = `○ 조사자 :                               ${db.survey.surveyor || ''}  (인)`;
-    wsSurvey.getCell('O30').value = `○ 입회자 :                               ${db.survey.witness || ''}  (인)`;
+    // Signatures shifted down by 8 rows (O26 -> O34, O28 -> O36)
+    wsSurvey.getCell('O34').value = `○ 조사자 :                               ${db.survey.surveyor || ''}  (인)`;
+    wsSurvey.getCell('O36').value = `○ 입회자 :                               ${db.survey.witness || ''}  (인)`;
     
-    // Embed Panorama Photo shifted down by 2 rows (C16:AD20 -> C18:AD22)
+    // Embed Panorama Photo shifted down by 8 rows (C16:AD20 -> C24:AD28)
     if (db.survey.photo) {
       const imgId = workbook.addImage({
         base64: db.survey.photo,
         extension: 'jpeg'
       });
       wsSurvey.addImage(imgId, {
-        tl: { col: 2, row: 17 }, // Col C (2), Row 18 (17)
-        br: { col: 30, row: 22 }  // Col AD (30), Row 22 (22)
+        tl: { col: 2, row: 23 }, // Col C (2), Row 24 (23)
+        br: { col: 30, row: 28 }  // Col AD (30), Row 28 (28)
       });
       log('기본조사서 전경/평면도 이미지 삽입 완료.');
     }
@@ -1182,9 +1229,15 @@ async function generateExcelBuffer() {
       row.getCell(6).value = item.unit || '';
       row.getCell(7).value = item.remarks || '';
       row.getCell(8).value = item.location || '';
-      row.getCell(9).value = item.hasLedger ? 'O' : '';
-      row.getCell(10).value = item.isBusiness ? '영업장' : '';
-      row.getCell(11).value = item.isResidence ? '거주' : '';
+      row.getCell(9).value = item.hasLedger ? '유' : '무';
+      row.getCell(10).value = item.isBusiness ? '영업장' : '비영업장';
+      row.getCell(11).value = item.isResidence ? '거주' : '비거주';
+      
+      // Align override
+      row.getCell(8).alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+      row.getCell(9).alignment = { vertical: 'middle', horizontal: 'center' };
+      row.getCell(10).alignment = { vertical: 'middle', horizontal: 'center' };
+      row.getCell(11).alignment = { vertical: 'middle', horizontal: 'center' };
       
       // Set alignment and border height
       row.height = 24;
@@ -1195,6 +1248,46 @@ async function generateExcelBuffer() {
       const start = EXCEL_ITEM_START_ROW + db.items.length;
       const count = EXCEL_DEFAULT_ITEMS_COUNT - db.items.length;
       wsItems.spliceRows(start, count);
+    }
+    
+    // Merge consecutive cells with identical values in columns H, I, J, K (8, 9, 10, 11)
+    if (db.items.length > 1) {
+      const columnsToMerge = [8, 9, 10, 11];
+      const startRow = EXCEL_ITEM_START_ROW;
+      const endRow = EXCEL_ITEM_START_ROW + db.items.length - 1;
+      
+      columnsToMerge.forEach(col => {
+        let runStart = startRow;
+        while (runStart <= endRow) {
+          let val = wsItems.getRow(runStart).getCell(col).value;
+          let runEnd = runStart;
+          while (
+            runEnd + 1 <= endRow && 
+            wsItems.getRow(runEnd + 1).getCell(col).value === val && 
+            val !== undefined && 
+            val !== null && 
+            val.toString().trim() !== ''
+          ) {
+            runEnd++;
+          }
+          
+          if (runEnd > runStart) {
+            const startCell = `${openpyxlColLetter(col)}${runStart}`;
+            const endCell = `${openpyxlColLetter(col)}${runEnd}`;
+            try {
+              wsItems.mergeCells(`${startCell}:${endCell}`);
+              wsItems.getCell(startCell).alignment = { 
+                vertical: 'middle', 
+                horizontal: col === 8 ? 'left' : 'center', 
+                wrapText: true 
+              };
+            } catch (e) {
+              log(`셀 병합 실패 (${startCell}:${endCell}): ${e.message}`, 'warning');
+            }
+          }
+          runStart = runEnd + 1;
+        }
+      });
     }
   }
   
@@ -1302,9 +1395,8 @@ async function generateExcelBuffer() {
         descColEnd = 22;    // V
       }
       
-      // Write photo description label (utilizing customSpecs if customized)
-      const defaultDesc = getDefaultItemDesc(item);
-      const itemDesc = item.customSpecs !== undefined ? item.customSpecs : defaultDesc;
+      // Write photo description label (utilizing custom overrides if customized)
+      const itemDesc = getCompositeItemDesc(item);
       wsPhotos.getCell(descRow, descColStart).value = itemDesc;
       
       // Embed composite photo

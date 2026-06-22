@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>동산 스마트 사진대지 & 기본조사서 시스템</title>
+  <title>디지털기본조사</title>
   
   <!-- Font Styles (Google Fonts) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -13,7 +13,7 @@
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
 
   <!-- Vanilla CSS Reference -->
-  <link rel="stylesheet" href="style.css?v=20260622_1">
+  <link rel="stylesheet" href="style.css?v=20260622_7">
 </head>
 <body>
   <div class="app-container">
@@ -21,7 +21,7 @@
     <header class="app-header">
       <div class="logo-area">
         <i data-lucide="layout-grid" class="logo-icon"></i>
-        <h1>SheetCraft <span>AI</span></h1>
+        <h1>디지털 <span>기본조사서</span></h1>
       </div>
       <div class="status-badge" id="templateStatus">
         <span class="pulse-dot"></span>
@@ -75,28 +75,19 @@
                             <!-- 소재지 (공통 주소) -->
               <div class="form-group col-span-2">
                 <label for="location_name">소재지 (공통 지번 주소)</label>
-                <div style="display: flex; gap: 8px;">
-                  <input type="text" id="location_name" placeholder="예: OO동 OOO-OOO" style="flex: 1;">
-                  <button type="button" class="btn btn-secondary btn-sm" onclick="openAddressSearch('location')">주소 검색</button>
-                </div>
+                <input type="text" id="location_name" placeholder="예: OO동 OOO-OOO">
               </div>
 
               <!-- 송달주소 -->
               <div class="form-group col-span-2">
                 <label for="rep_addr">송달주소 (공통 지번 주소)</label>
-                <div style="display: flex; gap: 8px;">
-                  <input type="text" id="rep_addr" placeholder="우편물을 수령할 주소 입력" style="flex: 1;">
-                  <button type="button" class="btn btn-secondary btn-sm" onclick="openAddressSearch('rep')">주소 검색</button>
-                </div>
+                <input type="text" id="rep_addr" placeholder="우편물을 수령할 주소 입력">
               </div>
 
               <!-- 사업자등록증상 소재지 -->
               <div class="form-group col-span-2">
                 <label for="biz_location">사업자등록증상 소재지 (지번 주소)</label>
-                <div style="display: flex; gap: 8px;">
-                  <input type="text" id="biz_location" placeholder="사업자등록증상의 소재지 주소 입력" style="flex: 1;">
-                  <button type="button" class="btn btn-secondary btn-sm" onclick="openAddressSearch('biz')">주소 검색</button>
-                </div>
+                <input type="text" id="biz_location" placeholder="사업자등록증상의 소재지 주소 입력">
               </div>
 
               <!-- 지구외 여부 -->
@@ -106,6 +97,45 @@
                   <input type="checkbox" id="out_of_district">
                   <span class="checkbox-text">지구외 (대상)</span>
                 </label>
+              </div>
+
+              <!-- 물건소재지 -->
+              <div class="form-group col-span-2">
+                <label for="item_location">물건소재지</label>
+                <input type="text" id="item_location" placeholder="물건소재지 주소 입력">
+              </div>
+
+              <!-- 자가/임차 및 기타허가사항 -->
+              <div class="form-group">
+                <label for="rent_type">자가/임차 구분</label>
+                <select id="rent_type">
+                  <option value="자가">자가</option>
+                  <option value="임차">임차</option>
+                  <option value="기타">기타</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="permit_notes">기타허가사항</label>
+                <input type="text" id="permit_notes" placeholder="허가사항 등 메모 입력">
+              </div>
+
+              <!-- 물건현황 체크박스 그룹 -->
+              <div class="form-group col-span-2">
+                <label>물건 현황 정보</label>
+                <div class="checkbox-grid-group">
+                  <label class="checkbox-label-container">
+                    <input type="checkbox" id="has_ledger">
+                    <span class="checkbox-text">건축물대장 유</span>
+                  </label>
+                  <label class="checkbox-label-container">
+                    <input type="checkbox" id="is_business">
+                    <span class="checkbox-text">영업장 여부</span>
+                  </label>
+                  <label class="checkbox-label-container">
+                    <input type="checkbox" id="is_residence">
+                    <span class="checkbox-text">거주 여부</span>
+                  </label>
+                </div>
               </div>
             </div>
           </div>
@@ -272,21 +302,7 @@
   <!-- Offscreen Canvas for Drawing Board Overlays (Hidden) -->
   <canvas id="synthesisCanvas" style="display: none;"></canvas>
 
-  <!-- Address Search Modal (Postcode Layer) -->
-  <div id="addressModal" class="address-modal-overlay hidden">
-    <div class="address-modal-container glass-card">
-      <div class="address-modal-header">
-        <h3><i data-lucide="map-pin"></i> 주소 검색</h3>
-        <button type="button" class="btn-close-modal" id="btnCloseAddressModal">
-          <i data-lucide="x"></i>
-        </button>
-      </div>
-      <div id="addressLayer" style="width:100%; height:450px; min-height:450px; position:relative; overflow:hidden; border-radius: var(--radius-sm);"></div>
-    </div>
-  </div>
-
   <!-- External Libraries via CDN -->
-  <script src="https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/lucide@0.344.0/dist/umd/lucide.min.js"></script>
@@ -295,6 +311,6 @@
   <script src="template_data.js"></script>
   
   <!-- Core Logic script -->
-  <script src="app.js?v=20260622_1"></script>
+  <script src="app.js?v=20260622_7"></script>
 </body>
 </html>
