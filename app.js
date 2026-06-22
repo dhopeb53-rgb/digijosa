@@ -799,6 +799,7 @@ function addTableDataRow(sourceItem = null, insertAfterId = null) {
     <div class="item-card-header">
       <span class="item-num">물건 #${itemIndex}</span>
       <div class="item-card-actions">
+        <button type="button" class="btn-item-action btn-calc-qty" title="규격에서 수량 계산">계산</button>
         <button type="button" class="btn-item-action btn-duplicate-item" title="이 물건 복제">복제</button>
         <button type="button" class="btn-item-action btn-move-up" title="위로 이동" aria-label="물건 위로 이동">↑</button>
         <button type="button" class="btn-item-action btn-move-down" title="아래로 이동" aria-label="물건 아래로 이동">↓</button>
@@ -818,10 +819,7 @@ function addTableDataRow(sourceItem = null, insertAfterId = null) {
           <input type="text" class="cell-name" placeholder="물건명 : 컨테이너 창고">
         </div>
         <div class="form-group">
-          <div class="qty-calc-row">
-            <input type="text" class="cell-qty" inputmode="decimal" placeholder="수량" style="text-align: right;">
-            <button type="button" class="btn-item-action btn-calc-qty" title="규격에서 수량 계산">계산</button>
-          </div>
+          <input type="text" class="cell-qty" inputmode="decimal" placeholder="수량" style="text-align: right;">
         </div>
         <div class="form-group">
           <select class="cell-unit">
