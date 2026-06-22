@@ -13,7 +13,7 @@
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
 
   <!-- Vanilla CSS Reference -->
-  <link rel="stylesheet" href="style.css?v=20260622_7">
+  <link rel="stylesheet" href="style.css?v=20260622_39">
 </head>
 <body>
   <div class="app-container">
@@ -43,8 +43,12 @@
         <i data-lucide="list-ordered"></i> 물건내역 작성
       </button>
       <button class="tab-btn" data-tab="tab-photos">
-        <i data-lucide="camera"></i> 사진대지 매칭
+        <i data-lucide="camera"></i> 사진대지 확인
         <span class="badge" id="photoBadge">0</span>
+      </button>
+      <button class="tab-btn" data-tab="tab-documents">
+        <i data-lucide="files"></i> 추가 제출서류
+        <span class="badge" id="documentBadge">0</span>
       </button>
     </nav>
 
@@ -54,86 +58,110 @@
       <!-- Tab 1: 기본조사서 -->
       <section id="tab-survey" class="tab-pane active">
         <div class="card glass-card">
-          <div class="card-header">
-            <h2><i data-lucide="info"></i> 기본 정보 입력</h2>
-            <p>조사서 양식의 상단 기본사항 및 서명 정보에 대입됩니다.</p>
+          <div class="card-header compact-title-header">
+            <h2><i data-lucide="info"></i> 기본정보 및 사업자 정보</h2>
+            <input type="text" class="header-district-input" id="district_name" placeholder="사업지구명">
           </div>
           <div class="card-body">
             <div class="form-grid">
+              <div class="owner-summary-row col-span-2">
+                <input type="text" id="owner_name" placeholder="소유자 성명">
+                <input type="text" id="rep_jumin" placeholder="주민등록번호">
+                <input type="text" id="rep_contact" placeholder="전화번호">
+              </div>
+              <!-- 일반사항 및 사업자 정보 -->
+              <div class="business-primary-row col-span-2">
+                <input type="text" id="company_name" placeholder="상호">
+                <input type="text" id="rep_name" placeholder="대표자 성명">
+                <input type="text" id="biz_reg_no" placeholder="사업자등록번호">
+                <input type="text" id="corp_reg_no" placeholder="법인등록번호">
+              </div>
+              <div class="business-id-row col-span-2">
+                <input type="text" id="biz_type" placeholder="업종">
+                <input type="text" id="biz_status" placeholder="업태">
+                <input type="text" id="permit_notes" placeholder="기타 허가사항">
+              </div>
+              <!-- 물건 현황 정보 -->
               <div class="form-group col-span-2">
-                <label for="district_name">사업지구명 (사진 왼쪽 하단 보드판 오버레이)</label>
-                <input type="text" id="district_name" placeholder="예: OO지구 주택재개발사업">
+                <div class="property-status-row">
+                  <select id="rent_type" class="status-rent-select" aria-label="자가 또는 임차 구분">
+                    <option value="자가">자가</option>
+                    <option value="임차">임차</option>
+                    <option value="기타">기타</option>
+                  </select>
+                  <label class="checkbox-label-container">
+                    <input type="checkbox" id="has_ledger">
+                    <span class="checkbox-text">건축물대장</span>
+                  </label>
+                  <label class="checkbox-label-container">
+                    <input type="checkbox" id="is_business">
+                    <span class="checkbox-text">영업장</span>
+                  </label>
+                  <label class="checkbox-label-container">
+                    <input type="checkbox" id="is_residence">
+                    <span class="checkbox-text">거주</span>
+                  </label>
+                  <label class="checkbox-label-container">
+                    <input type="checkbox" id="has_electricity">
+                    <span class="checkbox-text">전기</span>
+                  </label>
+                  <label class="checkbox-label-container">
+                    <input type="checkbox" id="has_water">
+                    <span class="checkbox-text">수도</span>
+                  </label>
+                  <label class="checkbox-label-container">
+                    <input type="checkbox" id="has_septic">
+                    <span class="checkbox-text">정화조</span>
+                  </label>
+                </div>
               </div>
-              <div class="form-group">
-                <label for="owner_name">소유자 (사진대지 연동)</label>
-                <input type="text" id="owner_name" placeholder="소유자 이름 입력">
-              </div>
-              <div class="form-group">
-                <label for="rep_contact">소유자 전화번호</label>
-                <input type="text" id="rep_contact" placeholder="010-0000-0000">
-              </div>
-                            <!-- 소재지 (공통 주소) -->
+              <!-- 물건 소재지 (공통 주소) -->
               <div class="form-group col-span-2">
-                <label for="location_name">소재지 (공통 지번 주소)</label>
-                <input type="text" id="location_name" placeholder="예: OO동 OOO-OOO">
+                <label for="location_name">물건 소재지</label>
+                <div class="address-search-row">
+                  <button type="button" class="btn-address-search" data-address-target="location">
+                    <i data-lucide="search"></i> 주소 검색
+                  </button>
+                  <input type="text" class="address-postcode" id="location_postcode" placeholder="우편번호" readonly>
+                  <input type="text" class="address-main" id="location_name" placeholder="지번주소">
+                  <input type="text" id="location_detail" placeholder="동·층·호 등 상세주소 입력">
+                  <label class="mini-checkbox-label">
+                    <input type="checkbox" id="out_of_district">
+                    <span>지구외</span>
+                  </label>
+                </div>
               </div>
 
               <!-- 송달주소 -->
               <div class="form-group col-span-2">
-                <label for="rep_addr">송달주소 (공통 지번 주소)</label>
-                <input type="text" id="rep_addr" placeholder="우편물을 수령할 주소 입력">
+                <label for="rep_addr">송달주소</label>
+                <div class="address-search-row">
+                  <button type="button" class="btn-address-search" data-address-target="rep">
+                    <i data-lucide="search"></i> 주소 검색
+                  </button>
+                  <input type="text" class="address-postcode" id="rep_postcode" placeholder="우편번호" readonly>
+                  <input type="text" class="address-main" id="rep_addr" placeholder="지번주소">
+                  <input type="text" id="rep_detail" placeholder="동·층·호 등 상세주소 입력">
+                  <label class="mini-checkbox-label">
+                    <input type="checkbox" class="address-district-check" data-address-check="rep">
+                    <span>지구외</span>
+                  </label>
+                </div>
               </div>
 
               <!-- 사업자등록증상 소재지 -->
               <div class="form-group col-span-2">
-                <label for="biz_location">사업자등록증상 소재지 (지번 주소)</label>
-                <input type="text" id="biz_location" placeholder="사업자등록증상의 소재지 주소 입력">
-              </div>
-
-              <!-- 지구외 여부 -->
-              <div class="form-group col-span-2">
-                <label>지구외 여부</label>
-                <label class="checkbox-label-container">
-                  <input type="checkbox" id="out_of_district">
-                  <span class="checkbox-text">지구외 (대상)</span>
-                </label>
-              </div>
-
-              <!-- 물건소재지 -->
-              <div class="form-group col-span-2">
-                <label for="item_location">물건소재지</label>
-                <input type="text" id="item_location" placeholder="물건소재지 주소 입력">
-              </div>
-
-              <!-- 자가/임차 및 기타허가사항 -->
-              <div class="form-group">
-                <label for="rent_type">자가/임차 구분</label>
-                <select id="rent_type">
-                  <option value="자가">자가</option>
-                  <option value="임차">임차</option>
-                  <option value="기타">기타</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label for="permit_notes">기타허가사항</label>
-                <input type="text" id="permit_notes" placeholder="허가사항 등 메모 입력">
-              </div>
-
-              <!-- 물건현황 체크박스 그룹 -->
-              <div class="form-group col-span-2">
-                <label>물건 현황 정보</label>
-                <div class="checkbox-grid-group">
-                  <label class="checkbox-label-container">
-                    <input type="checkbox" id="has_ledger">
-                    <span class="checkbox-text">건축물대장 유</span>
-                  </label>
-                  <label class="checkbox-label-container">
-                    <input type="checkbox" id="is_business">
-                    <span class="checkbox-text">영업장 여부</span>
-                  </label>
-                  <label class="checkbox-label-container">
-                    <input type="checkbox" id="is_residence">
-                    <span class="checkbox-text">거주 여부</span>
+                <label for="biz_location">사업자등록증상 소재지</label>
+                <div class="address-search-row">
+                  <button type="button" class="btn-address-search" data-address-target="biz">
+                    <i data-lucide="search"></i> 주소 검색
+                  </button>
+                  <input type="text" class="address-postcode" id="biz_postcode" placeholder="우편번호" readonly>
+                  <input type="text" class="address-main" id="biz_location" placeholder="지번주소">
+                  <input type="text" id="biz_detail" placeholder="동·층·호 등 상세주소 입력">
+                  <label class="mini-checkbox-label">
+                    <input type="checkbox" class="address-district-check" data-address-check="biz">
+                    <span>지구외</span>
                   </label>
                 </div>
               </div>
@@ -143,46 +171,27 @@
 
         <div class="card glass-card">
           <div class="card-header">
-            <h2><i data-lucide="user-check"></i> 일반사항 및 사업자 정보</h2>
+            <h2><i data-lucide="clipboard-list"></i> 특기사항</h2>
           </div>
           <div class="card-body">
-            <div class="form-grid">
-              <div class="form-group">
-                <label for="company_name">상호</label>
-                <input type="text" id="company_name" placeholder="상호명 입력">
-              </div>
-              <div class="form-group">
-                <label for="biz_type">업종</label>
-                <input type="text" id="biz_type" placeholder="업종 입력">
-              </div>
-              <div class="form-group">
-                <label for="rep_name">대표자 성명</label>
-                <input type="text" id="rep_name" placeholder="대표자 성명">
-              </div>
-              <div class="form-group">
-                <label for="rep_jumin">주민등록번호</label>
-                <input type="text" id="rep_jumin" placeholder="000000-0000000">
-              </div>
-
-
-              <div class="form-group">
-                <label for="biz_reg_no">사업자등록번호</label>
-                <input type="text" id="biz_reg_no" placeholder="000-00-00000">
-              </div>
-              <div class="form-group">
-                <label for="corp_reg_no">법인등록번호</label>
-                <input type="text" id="corp_reg_no" placeholder="000000-0000000">
-              </div>
+            <div class="form-group">
+              <textarea id="special_notes" rows="4" placeholder="조사 시 특기사항이나 메모를 입력하세요..."></textarea>
+            </div>
+            <div class="signature-row signature-row-compact">
+              <input type="text" id="surveyor_name" placeholder="조사자 성명">
+              <input type="text" id="witness_name" placeholder="입회자 성명">
+              <input type="text" id="surveyor_date" placeholder="조사일자">
             </div>
           </div>
         </div>
 
-        <div class="card glass-card">
-          <div class="card-header">
+        <div class="card glass-card collapsible-card collapsed" id="surveyPhotoCard">
+          <div class="card-header card-header-action">
             <h2><i data-lucide="image"></i> 현장 전경 또는 평면도 사진</h2>
-            <p>기본조사서 중간 평면도 칸(C16:AD20)에 자동 삽입되는 사진입니다.</p>
+            <button type="button" class="btn-toggle-card" id="btnToggleSurveyPhotoCard">펼치기</button>
           </div>
           <div class="card-body">
+            <p class="card-helper-text">기본조사서 중간 평면도 칸(C16:AD20)에 자동 삽입되는 사진입니다.</p>
             <div class="image-upload-box" id="surveyPhotoBox">
               <input type="file" id="survey_photo" accept="image/*" class="file-input">
               <div class="upload-placeholder">
@@ -200,39 +209,6 @@
           </div>
         </div>
 
-        <div class="card glass-card">
-          <div class="card-header">
-            <h2><i data-lucide="clipboard-list"></i> 특기사항</h2>
-          </div>
-          <div class="card-body">
-            <div class="form-group">
-              <textarea id="special_notes" rows="4" placeholder="조사 시 특기사항이나 메모를 입력하세요..."></textarea>
-            </div>
-          </div>
-        </div>
-
-        <div class="card glass-card">
-          <div class="card-header">
-            <h2><i data-lucide="pen-tool"></i> 서명 정보</h2>
-            <p>조사 보고서 하단에 서명되는 조사자와 입회자 명단입니다.</p>
-          </div>
-          <div class="card-body">
-            <div class="form-grid-3">
-              <div class="form-group">
-                <label for="surveyor_name">조사자 성명</label>
-                <input type="text" id="surveyor_name" placeholder="조사자 이름 입력">
-              </div>
-              <div class="form-group">
-                <label for="witness_name">입회자 성명</label>
-                <input type="text" id="witness_name" placeholder="입회자 이름 입력">
-              </div>
-              <div class="form-group">
-                <label for="surveyor_date">조사일자</label>
-                <input type="text" id="surveyor_date" placeholder="예: 2026-06-22">
-              </div>
-            </div>
-          </div>
-        </div>
       </section>
 
       <!-- Tab 2: 물건내역 작성 -->
@@ -254,7 +230,7 @@
         </div>
       </section>
 
-      <!-- Tab 3: 사진대지 매칭 -->
+      <!-- Tab 3: 사진대지 확인 -->
       <section id="tab-photos" class="tab-pane">
         <div class="alert-info-box">
           <i data-lucide="info"></i>
@@ -263,6 +239,19 @@
         
         <div class="photo-cards-grid" id="photoCardsGrid">
           <!-- Photo Cards will be dynamically inserted here -->
+        </div>
+      </section>
+
+      <!-- Tab 4: 추가 제출서류 -->
+      <section id="tab-documents" class="tab-pane">
+        <div class="alert-info-box">
+          <i data-lucide="info"></i>
+          <p>추가로 제출할 사진을 촬영하거나 선택하세요. 보드판 합성 없이 입력한 파일명으로 압축파일에 저장됩니다.</p>
+        </div>
+        <div class="photo-cards-grid" id="documentCardsGrid"></div>
+        <div class="table-add-trigger" id="documentAddTrigger">
+          <i data-lucide="plus-circle"></i>
+          <span>➕ 추가 제출서류 사진 추가</span>
         </div>
       </section>
 
@@ -280,7 +269,6 @@
       <div class="panel-content" id="panelContent">
         <div class="export-actions-group">
           <div class="input-with-icon">
-            <i data-lucide="mail"></i>
             <input type="email" id="emailRecipient" placeholder="전송받을 이메일 주소 입력">
           </div>
           <button type="button" class="btn btn-secondary" id="btnSendEmail">
@@ -302,15 +290,29 @@
   <!-- Offscreen Canvas for Drawing Board Overlays (Hidden) -->
   <canvas id="synthesisCanvas" style="display: none;"></canvas>
 
+  <!-- Address Search Layer -->
+  <div class="address-modal hidden" id="addressModal" role="dialog" aria-modal="true" aria-label="주소 검색">
+    <div class="address-modal-panel">
+      <div class="address-modal-header">
+        <strong>주소 검색</strong>
+        <button type="button" class="btn-close-address" id="btnCloseAddress" aria-label="주소 검색 닫기">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="address-postcode-container" id="addressPostcodeContainer"></div>
+    </div>
+  </div>
+
   <!-- External Libraries via CDN -->
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/lucide@0.344.0/dist/umd/lucide.min.js"></script>
+  <script src="https://t1.kakaocdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
   
   <!-- Base64 Template Data -->
   <script src="template_data.js"></script>
   
   <!-- Core Logic script -->
-  <script src="app.js?v=20260622_7"></script>
+  <script src="app.js?v=20260622_39"></script>
 </body>
 </html>

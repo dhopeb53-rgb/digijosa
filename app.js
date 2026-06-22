@@ -13,6 +13,7 @@ let db = {
     location: '',
     company: '',
     bizType: '',
+    bizStatus: '',
     repName: '',
     repJumin: '',
     repAddr: '',
@@ -23,15 +24,30 @@ let db = {
     photo: '', // Base64 of Site Panorama / Floor Plan
     district: '', // Project District Name (Bottom Left Overlay)
     bizLocation: '', // Address on Business Registration
+    locationRoad: '',
+    locationJibun: '',
+    locationZip: '',
+    locationDetail: '',
+    repRoad: '',
+    repJibun: '',
+    repZip: '',
+    repDetail: '',
+    bizLocationRoad: '',
+    bizLocationJibun: '',
+    bizLocationZip: '',
+    bizLocationDetail: '',
     outOfDistrict: false, // Out of District Status
-    itemLocation: '',
     hasLedger: false,
     isBusiness: false,
     isResidence: false,
+    hasElectricity: false,
+    hasWater: false,
+    hasSeptic: false,
     rentType: '자가',
     permitNotes: ''
   },
-  items: [] // List of items/objects (Tab 2)
+  items: [], // List of items/objects (Tab 2)
+  documents: [] // Additional submitted photos
 };
 
 // Default template row config in Excel Template (Sheet 2: 물건내역(영업))
@@ -46,14 +62,10 @@ const SURVEY_ITEM_TYPES = [
 ];
 
 const SURVEY_ITEM_UNITS = [
-  "㎡", "주", "식", "대", "개", "m", "기타", "기", "두", "동", "t", "평방피트", 
-  "조", "Kg", "세트", "톤", "상자", "차", "마리", "㎥", "군", "본", "정", "원/㎡", 
-  "장", "수", "개소", "점", "ℓ", "매", "포", "평", "바렛", "파레트", "마대", 
-  "소", "각", "cm", "단", "원/m", "폭", "근", "판", "척", "간", "가마", 
-  "㏊", "D/M", "g", "mi", "yd", "관", "KN/m", "온스", "M/T", "홉", "인", 
-  "%", "미국갤런", "in", "승", "ft", "원", "리", "원/a", "돈", "Kg/㎤", 
-  "평방야드", "Kg/㎠", "㎤", "원/t", "a", "평방자", "입방야드", "B/K", "￡", 
-  "단보", "정보", "acre", "입방인치", "입방피트", "Kg/m", "그레인", "해당없음"
+  "㎡", "주", "식", "대", "개", "m", "기타", "기", "두", "동", "t", 
+  "조", "Kg", "세트", "톤", "상자", "차", "마리", "㎥", "군", "본", "정",
+  "장", "수", "개소", "점", "매", "포", "평", "바렛", "파레트", "마대", 
+  "소", "각", "cm", "단", "폭", "근", "판", "척", "간", "가마", "해당없음"
 ];
 
 // Tab switching
@@ -151,28 +163,23 @@ function formatCorpNo(val) {
 }
 
 // Format address with optional road name address, zip code, and detailed address for Excel sheet
-function formatExcelAddress(jibun, road, zip, detail) {
-  let mainJibun = jibun || '';
+function formatExcelAddress(primary, road, zip, detail, jibun) {
+  let mainAddress = primary || '';
   if (detail) {
-    mainJibun = mainJibun ? `${mainJibun} ${detail}` : detail;
+    mainAddress = mainAddress ? `${mainAddress} ${detail}` : detail;
   }
   
-  let val = mainJibun;
+  let val = mainAddress;
+  const alternateRoad = road && road !== primary ? road : '';
+  const alternateJibun = jibun && jibun !== primary ? jibun : '';
   
-  if (road || zip) {
-    let mainRoad = road || '';
-    if (detail && mainRoad) {
-      mainRoad = `${mainRoad}, ${detail}`;
-    }
-    
-    let sub = '';
-    if (mainRoad && zip) {
-      sub = `(도로명: ${mainRoad} / 우편번호: ${zip})`;
-    } else if (mainRoad) {
-      sub = `(도로명: ${mainRoad})`;
-    } else if (zip) {
-      sub = `(우편번호: ${zip})`;
-    }
+  const subParts = [];
+  if (alternateRoad) subParts.push(`도로명: ${alternateRoad}`);
+  if (alternateJibun) subParts.push(`지번: ${alternateJibun}`);
+  if (zip) subParts.push(`우편번호: ${zip}`);
+
+  if (subParts.length) {
+    const sub = `(${subParts.join(' / ')})`;
     if (val) {
       val += `\n${sub}`;
     } else {
@@ -180,6 +187,117 @@ function formatExcelAddress(jibun, road, zip, detail) {
     }
   }
   return val;
+}
+
+function compactAddressFromDong(address) {
+  const value = (address || '').replace(/\s+/g, ' ').trim();
+  if (!value) return '';
+
+  const dongMatch = value.match(/(?:^|\s)([^\s]+(?:동|읍|면|리)(?:\s+.*)?$)/);
+  if (dongMatch) return dongMatch[1].trim();
+
+  return value;
+}
+
+function addOutOfDistrictMarker(value) {
+  if (!db.survey.outOfDistrict || !value) return value;
+  return value.startsWith('(지구외)') ? value : `(지구외) ${value}`;
+}
+
+const ADDRESS_CONFIG = {
+  location: {
+    inputId: 'location_name',
+    postcodeId: 'location_postcode',
+    detailId: 'location_detail',
+    mainKey: 'location',
+    roadKey: 'locationRoad',
+    jibunKey: 'locationJibun',
+    zipKey: 'locationZip',
+    detailKey: 'locationDetail'
+  },
+  rep: {
+    inputId: 'rep_addr',
+    postcodeId: 'rep_postcode',
+    detailId: 'rep_detail',
+    mainKey: 'repAddr',
+    roadKey: 'repRoad',
+    jibunKey: 'repJibun',
+    zipKey: 'repZip',
+    detailKey: 'repDetail'
+  },
+  biz: {
+    inputId: 'biz_location',
+    postcodeId: 'biz_postcode',
+    detailId: 'biz_detail',
+    mainKey: 'bizLocation',
+    roadKey: 'bizLocationRoad',
+    jibunKey: 'bizLocationJibun',
+    zipKey: 'bizLocationZip',
+    detailKey: 'bizLocationDetail'
+  }
+};
+
+function updateAddressMeta(config) {
+  const postcodeInput = document.getElementById(config.postcodeId);
+  if (postcodeInput) postcodeInput.value = db.survey[config.zipKey] || '';
+}
+
+function syncAddressFieldsFromForm() {
+  Object.values(ADDRESS_CONFIG).forEach(config => {
+    const input = document.getElementById(config.inputId);
+    const detailInput = document.getElementById(config.detailId);
+    if (input) db.survey[config.mainKey] = input.value.trim();
+    if (detailInput) db.survey[config.detailKey] = detailInput.value.trim();
+  });
+}
+
+function closeAddressSearch() {
+  const modal = document.getElementById('addressModal');
+  const container = document.getElementById('addressPostcodeContainer');
+  modal.classList.add('hidden');
+  container.innerHTML = '';
+}
+
+function openAddressSearch(target) {
+  const config = ADDRESS_CONFIG[target];
+  if (!config) return;
+
+  const Postcode = (window.kakao && window.kakao.Postcode)
+    || (window.daum && window.daum.Postcode);
+
+  if (!Postcode) {
+    alert('주소 검색 서비스를 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.');
+    return;
+  }
+
+  const modal = document.getElementById('addressModal');
+  const container = document.getElementById('addressPostcodeContainer');
+  container.innerHTML = '';
+  modal.classList.remove('hidden');
+
+  new Postcode({
+    oncomplete(data) {
+      const primary = data.jibunAddress
+        || data.autoJibunAddress
+        || data.roadAddress
+        || data.autoRoadAddress;
+      const input = document.getElementById(config.inputId);
+      const detailInput = document.getElementById(config.detailId);
+
+      db.survey[config.roadKey] = data.roadAddress || data.autoRoadAddress || '';
+      db.survey[config.jibunKey] = data.jibunAddress || data.autoJibunAddress || '';
+      db.survey[config.zipKey] = data.zonecode || '';
+
+      input.value = primary || '';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      updateAddressMeta(config);
+      closeAddressSearch();
+      detailInput.focus();
+      log(`${input.previousElementSibling ? input.previousElementSibling.textContent : '주소'} 검색 완료.`);
+    },
+    width: '100%',
+    height: '100%'
+  }).embed(container);
 }
 
 // Generate default description from item fields (name, qty, unit, specs)
@@ -250,6 +368,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     { id: 'location_name', key: 'location' },
     { id: 'company_name', key: 'company' },
     { id: 'biz_type', key: 'bizType' },
+    { id: 'biz_status', key: 'bizStatus' },
     { id: 'rep_name', key: 'repName' },
     { id: 'rep_jumin', key: 'repJumin' },
     { id: 'rep_addr', key: 'repAddr' },
@@ -259,7 +378,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     { id: 'special_notes', key: 'notes' },
     { id: 'district_name', key: 'district' },
     { id: 'biz_location', key: 'bizLocation' },
-    { id: 'item_location', key: 'itemLocation' },
     { id: 'rent_type', key: 'rentType' },
     { id: 'permit_notes', key: 'permitNotes' }
   ];
@@ -295,15 +413,17 @@ window.addEventListener('DOMContentLoaded', async () => {
         if (inputInfo.key === 'owner' || inputInfo.key === 'location' || inputInfo.key === 'district') {
           if (inputInfo.key === 'location') {
             // Update item locations in Tab 2 if they match the old global location or are empty
+            const oldCompactVal = compactAddressFromDong(oldVal);
+            const nextCompactVal = compactAddressFromDong(val);
             db.items.forEach(item => {
-              if (!item.location || item.location === oldVal) {
-                item.location = val;
+              if (!item.location || item.location === oldVal || item.location === oldCompactVal) {
+                item.location = nextCompactVal;
                 // Update the DOM input in Tab 2
                 const cardEl = document.getElementById(`item-card-${item.id}`);
                 if (cardEl) {
                   const locInput = cardEl.querySelector('.cell-location');
                   if (locInput) {
-                    locInput.value = val;
+                    locInput.value = nextCompactVal;
                   }
                 }
               }
@@ -315,13 +435,42 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
+  document.querySelectorAll('.btn-address-search').forEach(button => {
+    button.addEventListener('click', () => openAddressSearch(button.dataset.addressTarget));
+  });
+
+  document.getElementById('btnCloseAddress').addEventListener('click', closeAddressSearch);
+  document.getElementById('addressModal').addEventListener('click', (e) => {
+    if (e.target.id === 'addressModal') closeAddressSearch();
+  });
+
+  Object.values(ADDRESS_CONFIG).forEach(config => {
+    const detailInput = document.getElementById(config.detailId);
+    detailInput.addEventListener('input', (e) => {
+      db.survey[config.detailKey] = e.target.value;
+    });
+  });
+
   // Bind out_of_district checkbox
   const outOfDistrictEl = document.getElementById('out_of_district');
   if (outOfDistrictEl) {
     outOfDistrictEl.addEventListener('change', (e) => {
       db.survey.outOfDistrict = e.target.checked;
+      document.querySelectorAll('.address-district-check').forEach(check => {
+        check.checked = e.target.checked;
+      });
     });
   }
+
+  document.querySelectorAll('.address-district-check').forEach(check => {
+    check.addEventListener('change', (e) => {
+      db.survey.outOfDistrict = e.target.checked;
+      outOfDistrictEl.checked = e.target.checked;
+      document.querySelectorAll('.address-district-check').forEach(other => {
+        other.checked = e.target.checked;
+      });
+    });
+  });
 
   // Bind new global checkboxes
   const hasLedgerEl = document.getElementById('has_ledger');
@@ -344,6 +493,19 @@ window.addEventListener('DOMContentLoaded', async () => {
       db.survey.isResidence = e.target.checked;
     });
   }
+
+  [
+    { id: 'has_electricity', key: 'hasElectricity' },
+    { id: 'has_water', key: 'hasWater' },
+    { id: 'has_septic', key: 'hasSeptic' }
+  ].forEach(info => {
+    const el = document.getElementById(info.id);
+    if (el) {
+      el.addEventListener('change', (e) => {
+        db.survey[info.key] = e.target.checked;
+      });
+    }
+  });
 
   // Handle Site Panorama / Floor Plan Photo Upload
   const surveyPhotoInput = document.getElementById('survey_photo');
@@ -381,17 +543,26 @@ window.addEventListener('DOMContentLoaded', async () => {
     log('평면도 사진이 제거되었습니다.');
   });
 
-  // Tab 2: Add initial rows
+  // Tab 2: Add initial row
   addTableDataRow();
-  addTableDataRow();
-  addTableDataRow();
+  addDocumentCard();
   
   // Bind Action Buttons
   document.getElementById('tableAddTrigger').addEventListener('click', () => {
     addTableDataRow();
   });
+  document.getElementById('documentAddTrigger').addEventListener('click', addDocumentCard);
   document.getElementById('btnDownloadZip').addEventListener('click', downloadZipArchive);
   document.getElementById('btnSendEmail').addEventListener('click', sendEmailWithZip);
+
+  const surveyPhotoCard = document.getElementById('surveyPhotoCard');
+  const btnToggleSurveyPhotoCard = document.getElementById('btnToggleSurveyPhotoCard');
+  if (surveyPhotoCard && btnToggleSurveyPhotoCard) {
+    btnToggleSurveyPhotoCard.addEventListener('click', () => {
+      surveyPhotoCard.classList.toggle('collapsed');
+      btnToggleSurveyPhotoCard.innerText = surveyPhotoCard.classList.contains('collapsed') ? '펼치기' : '접기';
+    });
+  }
   
   // Collapsible Bottom Panel (Bottom Sheet) Logic
   const actionsPanel = document.getElementById('actionsPanel');
@@ -405,9 +576,177 @@ window.addEventListener('DOMContentLoaded', async () => {
 
 });
 
+function getImageExtension(mimeType, originalName = '') {
+  const originalExtension = originalName.includes('.') ? originalName.split('.').pop().toLowerCase() : '';
+  if (/^[a-z0-9]{2,5}$/.test(originalExtension)) return originalExtension === 'jpeg' ? 'jpg' : originalExtension;
+  const mimeMap = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'image/gif': 'gif',
+    'image/heic': 'heic',
+    'image/heif': 'heif'
+  };
+  return mimeMap[mimeType] || 'jpg';
+}
+
+function sanitizeFilename(name, fallback) {
+  const clean = (name || fallback).trim().replace(/[\/\\?%*:|"<>]/g, '_').replace(/\.+$/g, '');
+  return clean || fallback;
+}
+
+function setItemPhotoPreview(item) {
+  const wrapper = document.querySelector(`#item-card-${item.id} .item-photo-preview-wrapper`);
+  if (!wrapper) return;
+
+  const activePhoto = item.compositeImage || item.image;
+  if (activePhoto) {
+    wrapper.innerHTML = `<img src="data:image/jpeg;base64,${activePhoto}" alt="물건 사진 미리보기">`;
+  } else {
+    wrapper.innerHTML = `<div class="no-photo-placeholder"><i data-lucide="camera"></i><span>물건 사진</span></div>`;
+    lucide.createIcons();
+  }
+}
+
+function calculateQuantityFromSpecs(item, card) {
+  const specsEl = card.querySelector('.cell-specs');
+  const qtyEl = card.querySelector('.cell-qty');
+  const unitSelect = card.querySelector('.cell-unit');
+  const unitCustom = card.querySelector('.cell-unit-custom');
+  const raw = (specsEl.value || '').trim();
+  const expression = raw.match(/(\d+(?:\.\d+)?)\s*(?:x|X|×|\*)\s*(\d+(?:\.\d+)?)(?:\s*(?:x|X|×|\*)\s*(\d+(?:\.\d+)?))?/);
+
+  if (!expression) {
+    alert('구조 및 규격에 예: 2.5x3 또는 2.5x3x2 형식으로 입력하면 수량을 계산할 수 있습니다.');
+    return;
+  }
+
+  const numbers = expression.slice(1).filter(Boolean).map(Number);
+  const result = numbers.reduce((acc, num) => acc * num, 1);
+  const rounded = Math.round(result * 1000) / 1000;
+  const nextUnit = numbers.length >= 3 ? '㎥' : '㎡';
+
+  qtyEl.value = String(rounded);
+  item.qty = qtyEl.value;
+
+  if (SURVEY_ITEM_UNITS.includes(nextUnit)) {
+    unitSelect.value = nextUnit;
+    unitCustom.classList.add('hidden');
+    item.unit = nextUnit;
+  }
+
+  syncItemData(item.id);
+  log(`수량 자동 계산: ${numbers.join(' × ')} = ${rounded}${nextUnit}`);
+}
+
+function updateDocumentBadge() {
+  const count = db.documents.filter(documentItem => documentItem.image).length;
+  document.getElementById('documentBadge').innerText = count;
+}
+
+function addDocumentCard() {
+  const documentItem = {
+    id: Date.now() + Math.floor(Math.random() * 1000),
+    filename: `추가제출서류_${db.documents.length + 1}`,
+    originalName: '',
+    mimeType: 'image/jpeg',
+    extension: 'jpg',
+    image: ''
+  };
+  db.documents.push(documentItem);
+  renderDocumentCards();
+}
+
+function deleteDocumentCard(id) {
+  db.documents = db.documents.filter(documentItem => documentItem.id !== id);
+  renderDocumentCards();
+}
+
+function renderDocumentCards() {
+  const grid = document.getElementById('documentCardsGrid');
+  grid.innerHTML = '';
+
+  if (db.documents.length === 0) {
+    grid.innerHTML = `
+      <div class="alert-info-box">
+        <i data-lucide="image-plus"></i>
+        <p>아래의 <strong>추가 제출서류 사진 추가</strong>를 눌러 사진을 등록하세요.</p>
+      </div>
+    `;
+    updateDocumentBadge();
+    lucide.createIcons();
+    return;
+  }
+
+  db.documents.forEach((documentItem, index) => {
+    const card = document.createElement('div');
+    card.className = 'photo-card document-card';
+    card.dataset.documentId = documentItem.id;
+    card.innerHTML = `
+      <div class="photo-card-info-header">
+        <span class="photo-card-num">추가서류 #${index + 1}</span>
+        <span class="photo-card-title">${documentItem.filename}.${documentItem.extension}</span>
+      </div>
+      <div class="photo-card-body">
+        <div class="photo-card-photo-col">
+          <div class="document-preview-wrapper">
+            ${documentItem.image
+              ? `<img src="data:${documentItem.mimeType};base64,${documentItem.image}" alt="추가 제출서류 미리보기">`
+              : `<div class="no-photo-placeholder"><i data-lucide="image"></i><span>사진 미리보기</span></div>`}
+          </div>
+          <input type="file" class="card-file-input document-file-input" accept="image/*">
+        </div>
+        <div class="photo-card-settings-col">
+          <div class="form-group">
+            <label>저장할 파일명</label>
+            <input type="text" class="document-filename" value="${documentItem.filename}" placeholder="파일명 입력">
+          </div>
+          <p class="document-file-note">확장자는 선택한 사진 형식에 맞춰 자동 적용됩니다.</p>
+          <div class="document-card-actions">
+            <button type="button" class="btn-text-danger delete-document">삭제</button>
+          </div>
+        </div>
+      </div>
+    `;
+    grid.appendChild(card);
+
+    const fileInput = card.querySelector('.document-file-input');
+    const filenameInput = card.querySelector('.document-filename');
+    const title = card.querySelector('.photo-card-title');
+
+    fileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        documentItem.image = await fileToBase64(file);
+        documentItem.originalName = file.name;
+        documentItem.mimeType = file.type || 'image/jpeg';
+        documentItem.extension = getImageExtension(documentItem.mimeType, file.name);
+        if (!filenameInput.value.trim() || /^추가제출서류_\d+$/.test(filenameInput.value.trim())) {
+          documentItem.filename = file.name.replace(/\.[^.]+$/, '');
+        }
+        renderDocumentCards();
+        log(`추가 제출서류 사진 등록: ${file.name}`);
+      } catch (err) {
+        log('추가 제출서류 이미지 변환 실패', 'error');
+      }
+    });
+
+    filenameInput.addEventListener('input', (e) => {
+      documentItem.filename = e.target.value;
+      title.textContent = `${e.target.value || `추가제출서류_${index + 1}`}.${documentItem.extension}`;
+    });
+
+    card.querySelector('.delete-document').addEventListener('click', () => deleteDocumentCard(documentItem.id));
+  });
+
+  updateDocumentBadge();
+  lucide.createIcons();
+}
+
 // Dynamic Row addition (Item Form Card) (Tab 2)
 let rowIdCounter = 0;
-function addTableDataRow() {
+function addTableDataRow(sourceItem = null, insertAfterId = null) {
   rowIdCounter++;
   const container = document.getElementById('itemCardsList');
   const card = document.createElement('div');
@@ -415,10 +754,9 @@ function addTableDataRow() {
   card.className = 'item-form-card item-row-fade-in';
   
   const currentId = rowIdCounter;
-  const itemIndex = db.items.length + 1;
   
   // Bind inputs within the card
-  const rowObj = {
+  const defaults = {
     id: currentId,
     type: '기타지장물',
     name: '',
@@ -426,7 +764,7 @@ function addTableDataRow() {
     qty: 1,
     unit: '식',
     remarks: '',
-    location: db.survey.location || '',
+    location: compactAddressFromDong(db.survey.location),
     hasLedger: false,
     isBusiness: false,
     isResidence: false,
@@ -434,102 +772,115 @@ function addTableDataRow() {
     compositeImage: '', // Synthesized with board Base64
     overlayEnabled: true // Overlay enabled by default
   };
+  const rowObj = sourceItem
+    ? { ...sourceItem, id: currentId }
+    : defaults;
   
-  db.items.push(rowObj);
+  const insertIndex = insertAfterId === null
+    ? db.items.length
+    : db.items.findIndex(item => item.id === insertAfterId) + 1;
+  db.items.splice(insertIndex, 0, rowObj);
+  const itemIndex = insertIndex + 1;
+
+  const isCustomType = !SURVEY_ITEM_TYPES.includes(rowObj.type);
+  const isCustomUnit = !SURVEY_ITEM_UNITS.includes(rowObj.unit);
   
   const typeOptionsHtml = SURVEY_ITEM_TYPES.map(t => 
-    `<option value="${t}" ${t === '기타지장물' ? 'selected' : ''}>${t}</option>`
-  ).join('') + `<option value="custom">직접 입력...</option>`;
+    `<option value="${t}" ${!isCustomType && t === rowObj.type ? 'selected' : ''}>${t}</option>`
+  ).join('') + `<option value="custom" ${isCustomType ? 'selected' : ''}>직접 입력...</option>`;
   
   const unitOptionsHtml = SURVEY_ITEM_UNITS.map(u => 
-    `<option value="${u}" ${u === '식' ? 'selected' : ''}>${u}</option>`
-  ).join('') + `<option value="custom">직접 입력...</option>`;
+    `<option value="${u}" ${!isCustomUnit && u === rowObj.unit ? 'selected' : ''}>${u}</option>`
+  ).join('') + `<option value="custom" ${isCustomUnit ? 'selected' : ''}>직접 입력...</option>`;
   
   card.innerHTML = `
     <div class="item-card-header">
       <span class="item-num">물건 #${itemIndex}</span>
-      <button type="button" class="btn-text-danger btn-delete-item">삭제</button>
+      <div class="item-card-actions">
+        <button type="button" class="btn-item-action btn-duplicate-item" title="이 물건 복제">복제</button>
+        <button type="button" class="btn-item-action btn-move-up" title="위로 이동" aria-label="물건 위로 이동">↑</button>
+        <button type="button" class="btn-item-action btn-move-down" title="아래로 이동" aria-label="물건 아래로 이동">↓</button>
+        <button type="button" class="btn-text-danger btn-delete-item">삭제</button>
+      </div>
     </div>
     <div class="item-card-body">
       <!-- Line 1: 유형 | 명 | 수량 | 단위 -->
       <div class="item-card-row-1">
         <div class="form-group">
-          <label>물건유형</label>
           <select class="cell-type">
             ${typeOptionsHtml}
           </select>
-          <input type="text" class="cell-type-custom hidden" placeholder="유형 직접 입력">
+          <input type="text" class="cell-type-custom ${isCustomType ? '' : 'hidden'}" placeholder="유형 직접 입력">
         </div>
         <div class="form-group">
-          <label>물건명</label>
-          <input type="text" class="cell-name" placeholder="예: 컨테이너 창고">
+          <input type="text" class="cell-name" placeholder="물건명 : 컨테이너 창고">
         </div>
         <div class="form-group">
-          <label>수량</label>
-          <input type="text" class="cell-qty" inputmode="decimal" value="1" placeholder="수량" style="text-align: right;">
+          <div class="qty-calc-row">
+            <input type="text" class="cell-qty" inputmode="decimal" placeholder="수량" style="text-align: right;">
+            <button type="button" class="btn-item-action btn-calc-qty" title="규격에서 수량 계산">계산</button>
+          </div>
         </div>
         <div class="form-group">
-          <label>단위</label>
           <select class="cell-unit">
             ${unitOptionsHtml}
           </select>
-          <input type="text" class="cell-unit-custom hidden" placeholder="단위 직접 입력" style="width: 70px;">
+          <input type="text" class="cell-unit-custom ${isCustomUnit ? '' : 'hidden'}" placeholder="단위 직접 입력" style="width: 70px;">
         </div>
       </div>
       
       <!-- Line 2: 구조 및 규격 & 비고 (Parallel) -->
       <div class="item-card-row-2">
         <div class="form-group">
-          <label>구조 및 규격</label>
-          <textarea class="cell-specs" rows="1" placeholder="예: 조립식 판넬조 2.5x3m"></textarea>
+          <textarea class="cell-specs" rows="1" placeholder="구조 및 규격 : 조립식 판넬조 2.5*3m"></textarea>
         </div>
         <div class="form-group">
-          <label>비고</label>
-          <input type="text" class="cell-remarks" placeholder="비고 정보 입력">
+          <input type="text" class="cell-remarks" placeholder="비고">
         </div>
       </div>
       
-      <!-- Line 3: 물건 소재지 & 체크박스 그룹 -->
+      <!-- Line 3: 물건 소재지 & 현황 정보 -->
       <div class="item-card-row-3">
-        <div class="form-group">
-          <label>물건 소재지</label>
-          <input type="text" class="cell-location" value="${rowObj.location}" placeholder="예: OO동 OOO-OOO">
+        <div class="inline-location-field">
+          <span>물건소재지 :</span>
+          <input type="text" class="cell-location" placeholder="예: OO동 OOO-OOO">
         </div>
-        <div class="checkbox-grid-group">
-          <div class="form-group">
-            <label>건축물대장</label>
-            <label class="checkbox-label-container">
-              <input type="checkbox" class="cell-ledger">
-              <span class="checkbox-text">대장 유</span>
-            </label>
-          </div>
-          <div class="form-group">
-            <label>영업장 여부</label>
-            <label class="checkbox-label-container">
-              <input type="checkbox" class="cell-business">
-              <span class="checkbox-text">영업장</span>
-            </label>
-          </div>
-          <div class="form-group">
-            <label>거주 여부</label>
-            <label class="checkbox-label-container">
-              <input type="checkbox" class="cell-residence">
-              <span class="checkbox-text">거주</span>
-            </label>
-          </div>
+        <div class="item-status-row">
+          <label class="checkbox-label-container">
+            <input type="checkbox" class="cell-ledger">
+            <span class="checkbox-text">건축물대장</span>
+          </label>
+          <label class="checkbox-label-container">
+            <input type="checkbox" class="cell-business">
+            <span class="checkbox-text">영업장</span>
+          </label>
+          <label class="checkbox-label-container">
+            <input type="checkbox" class="cell-residence">
+            <span class="checkbox-text">거주</span>
+          </label>
         </div>
       </div>
     </div>
   `;
   
-  container.appendChild(card);
+  const previousCard = insertAfterId === null ? null : document.getElementById(`item-card-${insertAfterId}`);
+  if (previousCard) {
+    previousCard.insertAdjacentElement('afterend', card);
+  } else {
+    container.appendChild(card);
+  }
   lucide.createIcons({ attrs: { class: 'lucide-icon-sm' } });
   
-  // Set default location in input field (for fallback safety)
-  const inputLocation = card.querySelector('.cell-location');
-  if (inputLocation) {
-    inputLocation.value = rowObj.location;
-  }
+  card.querySelector('.cell-type-custom').value = isCustomType ? rowObj.type : '';
+  card.querySelector('.cell-name').value = rowObj.name || '';
+  card.querySelector('.cell-specs').value = rowObj.specs || '';
+  card.querySelector('.cell-qty').value = rowObj.qty ?? '';
+  card.querySelector('.cell-unit-custom').value = isCustomUnit ? rowObj.unit : '';
+  card.querySelector('.cell-remarks').value = rowObj.remarks || '';
+  card.querySelector('.cell-location').value = rowObj.location || '';
+  card.querySelector('.cell-ledger').checked = !!rowObj.hasLedger;
+  card.querySelector('.cell-business').checked = !!rowObj.isBusiness;
+  card.querySelector('.cell-residence').checked = !!rowObj.isResidence;
   
   const selectType = card.querySelector('.cell-type');
   const inputTypeCustom = card.querySelector('.cell-type-custom');
@@ -614,15 +965,25 @@ function addTableDataRow() {
     rowObj.isResidence = e.target.checked;
     syncItemData(currentId);
   });
+
+  card.querySelector('.btn-calc-qty').addEventListener('click', () => {
+    calculateQuantityFromSpecs(rowObj, card);
+  });
   
   // Delete action
   card.querySelector('.btn-delete-item').addEventListener('click', () => {
     deleteTableRow(currentId, card);
   });
+  card.querySelector('.btn-duplicate-item').addEventListener('click', () => {
+    addTableDataRow(rowObj, currentId);
+    log(`물건 #${db.items.findIndex(item => item.id === currentId) + 1} 복제 완료`);
+  });
+  card.querySelector('.btn-move-up').addEventListener('click', () => moveTableRow(currentId, -1));
+  card.querySelector('.btn-move-down').addEventListener('click', () => moveTableRow(currentId, 1));
   
   updateRowNumbers();
   updatePhotoCards();
-  log(`지장물 항목 추가 (ID: ${currentId})`);
+  log(`${sourceItem ? '지장물 항목 복제' : '지장물 항목 추가'} (ID: ${currentId})`);
 }
 
 // Delete Item card
@@ -637,11 +998,35 @@ function deleteTableRow(id, cardElement) {
   }
 }
 
+function moveTableRow(id, direction) {
+  const currentIndex = db.items.findIndex(item => item.id === id);
+  const targetIndex = currentIndex + direction;
+  if (currentIndex < 0 || targetIndex < 0 || targetIndex >= db.items.length) return;
+
+  const [item] = db.items.splice(currentIndex, 1);
+  db.items.splice(targetIndex, 0, item);
+
+  const card = document.getElementById(`item-card-${id}`);
+  const targetItem = db.items[direction < 0 ? targetIndex + 1 : targetIndex - 1];
+  const targetCard = document.getElementById(`item-card-${targetItem.id}`);
+  if (direction < 0) {
+    targetCard.insertAdjacentElement('beforebegin', card);
+  } else {
+    targetCard.insertAdjacentElement('afterend', card);
+  }
+
+  updateRowNumbers();
+  updatePhotoCards();
+  log(`물건 순서 변경: #${currentIndex + 1} → #${targetIndex + 1}`);
+}
+
 // Re-index row numbers displayed in the HTML cards list
 function updateRowNumbers() {
   const cards = document.querySelectorAll('#itemCardsList .item-form-card');
   cards.forEach((card, i) => {
     card.querySelector('.item-num').innerText = `물건 #${i + 1}`;
+    card.querySelector('.btn-move-up').disabled = i === 0;
+    card.querySelector('.btn-move-down').disabled = i === cards.length - 1;
   });
   document.getElementById('photoBadge').innerText = db.items.length;
 }
@@ -675,7 +1060,7 @@ function syncItemData(id) {
     }
     const locInput = cardElement.querySelector('.card-location');
     if (locInput && item.customLocation === undefined) {
-      locInput.value = item.location || db.survey.location || '';
+      locInput.value = item.location || compactAddressFromDong(db.survey.location) || '';
     }
     
     // If there is an image loaded, re-draw overlay since text information changed
@@ -688,7 +1073,7 @@ function syncItemData(id) {
 // Update survey header titles at the top of Photo Log
 function syncSurveyHeadersToPhotos() {
   const ownerLabel = db.survey.owner || 'OOO';
-  const locLabel = db.survey.location || 'OO동 OOO-OOO';
+  const locLabel = compactAddressFromDong(db.survey.location) || 'OO동 OOO-OOO';
   log(`소재지/소유자/지구명 동기화 수행: 소유자: ${ownerLabel}, 주소: ${locLabel}`);
   
   // Trigger redraw of overlays for all cards since location info changed
@@ -698,7 +1083,7 @@ function syncSurveyHeadersToPhotos() {
     if (cardEl) {
       const locInput = cardEl.querySelector('.card-location');
       if (locInput && item.customLocation === undefined) {
-        locInput.value = item.location || db.survey.location || '';
+        locInput.value = item.location || compactAddressFromDong(db.survey.location) || '';
       }
       
       const ownerInput = cardEl.querySelector('.card-owner');
@@ -777,7 +1162,7 @@ function updatePhotoCards() {
           <div class="form-grid" style="gap: 10px;">
             <div class="form-group">
               <label>소재지 (물건내역 연동)</label>
-              <input type="text" class="card-location" data-item-id="${item.id}" value="${item.customLocation !== undefined ? item.customLocation : (item.location || db.survey.location || '')}" placeholder="소재지 입력">
+              <input type="text" class="card-location" data-item-id="${item.id}" value="${item.customLocation !== undefined ? item.customLocation : (item.location || compactAddressFromDong(db.survey.location) || '')}" placeholder="소재지 입력">
             </div>
             <div class="form-group">
               <label>소유자 (기본조사서 연동)</label>
@@ -953,7 +1338,7 @@ function drawCompositeImage(item) {
       const labels = ['사업지구명', '소 재 지', '물건내용', '소 유 자', '조사일자'];
       
       const districtVal = db.survey.district || '';
-      const locationVal = item.customLocation !== undefined ? item.customLocation : (item.location || db.survey.location || '');
+      const locationVal = compactAddressFromDong(item.customLocation !== undefined ? item.customLocation : (item.location || db.survey.location || ''));
       const descVal = getCompositeItemDesc(item);
       const ownerVal = item.customOwner !== undefined ? item.customOwner : (db.survey.owner || '');
       const dateVal = db.survey.date || new Date().toISOString().split('T')[0];
@@ -983,20 +1368,358 @@ function drawCompositeImage(item) {
     
     // Save synthesized Base64 JPEG (Quality 0.8)
     const compositeBase64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
-    item.compositeImage = compositeBase64;
+    item.compositeImage = item.overlayEnabled ? compositeBase64 : item.image;
     
     // Update HTML preview wrapper immediately
     const previewWrapper = document.getElementById(`preview-wrapper-${item.id}`);
     if (previewWrapper) {
-      previewWrapper.innerHTML = `<img src="data:image/jpeg;base64,${compositeBase64}" alt="합성 이미지 미리보기">`;
+      previewWrapper.innerHTML = `<img src="data:image/jpeg;base64,${item.compositeImage}" alt="합성 이미지 미리보기">`;
       previewWrapper.classList.remove('hidden');
     }
+    setItemPhotoPreview(item);
   };
+}
+
+function rebuildSurveyWorksheet(workbook, wsSurvey) {
+  wsSurvey.name = '기본조사서';
+
+  const existingMerges = [...((wsSurvey.model && wsSurvey.model.merges) || [])];
+  existingMerges.forEach(range => {
+    try { wsSurvey.unMergeCells(range); } catch (e) {}
+  });
+
+  for (let r = 1; r <= 55; r++) {
+    const row = wsSurvey.getRow(r);
+    row.height = undefined;
+    for (let c = 1; c <= 32; c++) {
+      const cell = row.getCell(c);
+      cell.value = null;
+      cell.style = {};
+    }
+  }
+
+  wsSurvey.pageSetup = {
+    paperSize: 9,
+    orientation: 'portrait',
+    fitToPage: true,
+    fitToWidth: 1,
+    fitToHeight: 1,
+    margins: { left: 0.25, right: 0.25, top: 0.35, bottom: 0.35, header: 0.1, footer: 0.1 }
+  };
+
+  wsSurvey.columns = Array.from({ length: 32 }, () => ({ width: 3.2 }));
+  [4, 8, 12, 16, 20, 24, 28, 32].forEach(col => {
+    wsSurvey.getColumn(col).width = 4.2;
+  });
+
+  const colors = {
+    title: '1E3A8A',
+    section: 'DBEAFE',
+    label: 'EFF6FF',
+    value: 'FFFFFF',
+    border: '94A3B8',
+    muted: 'F8FAFC'
+  };
+  const thinBorder = {
+    top: { style: 'thin', color: { argb: colors.border } },
+    left: { style: 'thin', color: { argb: colors.border } },
+    bottom: { style: 'thin', color: { argb: colors.border } },
+    right: { style: 'thin', color: { argb: colors.border } }
+  };
+
+  const merge = (range, value, options = {}) => {
+    try { wsSurvey.mergeCells(range); } catch (e) {}
+    const cell = wsSurvey.getCell(range.split(':')[0]);
+    cell.value = value || '';
+    cell.font = options.font || { name: '맑은 고딕', size: 10 };
+    cell.alignment = options.alignment || { vertical: 'middle', horizontal: 'center', wrapText: true };
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: options.fill || colors.value }
+    };
+    cell.border = thinBorder;
+    return cell;
+  };
+
+  const section = (range, value) => merge(range, value, {
+    fill: colors.section,
+    font: { name: '맑은 고딕', size: 11, bold: true, color: { argb: '1E3A8A' } }
+  });
+  const label = (range, value) => merge(range, value, {
+    fill: colors.label,
+    font: { name: '맑은 고딕', size: 10, bold: true, color: { argb: '334155' } }
+  });
+  const value = (range, text, align = 'left') => merge(range, text, {
+    fill: colors.value,
+    font: { name: '맑은 고딕', size: 10, color: { argb: '111827' } },
+    alignment: { vertical: 'middle', horizontal: align, wrapText: true }
+  });
+
+  wsSurvey.getRow(1).height = 24;
+  wsSurvey.getRow(2).height = 24;
+  merge('A1:AF2', '디지털 기본조사서', {
+    fill: colors.title,
+    font: { name: '맑은 고딕', size: 18, bold: true, color: { argb: 'FFFFFF' } },
+    alignment: { vertical: 'middle', horizontal: 'center' }
+  });
+
+  section('A3:AF3', '기본정보 및 사업자 정보');
+  label('A4:D4', '사업지구명');
+  value('E4:P4', db.survey.district || '');
+  label('Q4:T4', '소유자 성명');
+  value('U4:AF4', db.survey.owner || '');
+  label('A5:D5', '주민등록번호');
+  value('E5:P5', db.survey.repJumin || '');
+  label('Q5:T5', '전화번호');
+  value('U5:AF5', db.survey.repContact || '');
+  label('A6:D6', '상호');
+  value('E6:P6', db.survey.company || '');
+  label('Q6:T6', '대표자');
+  value('U6:AF6', db.survey.repName || '');
+  label('A7:D7', '사업자번호');
+  value('E7:P7', db.survey.bizRegNo || '');
+  label('Q7:T7', '법인번호');
+  value('U7:AF7', db.survey.corpRegNo || '');
+  label('A8:D8', '업종');
+  value('E8:P8', db.survey.bizType || '');
+  label('Q8:T8', '업태');
+  value('U8:AF8', db.survey.bizStatus || '');
+  label('A9:D9', '기타 허가사항');
+  value('E9:AF9', db.survey.permitNotes || '');
+
+  const locationVal = addOutOfDistrictMarker(formatExcelAddress(
+    db.survey.location,
+    db.survey.locationRoad,
+    db.survey.locationZip,
+    db.survey.locationDetail,
+    db.survey.locationJibun
+  ));
+  const repVal = formatExcelAddress(
+    db.survey.repAddr,
+    db.survey.repRoad,
+    db.survey.repZip,
+    db.survey.repDetail,
+    db.survey.repJibun
+  );
+  const bizLocationVal = formatExcelAddress(
+    db.survey.bizLocation,
+    db.survey.bizLocationRoad,
+    db.survey.bizLocationZip,
+    db.survey.bizLocationDetail,
+    db.survey.bizLocationJibun
+  );
+
+  section('A10:AF10', '주소 정보');
+  wsSurvey.getRow(11).height = 30;
+  wsSurvey.getRow(12).height = 30;
+  wsSurvey.getRow(13).height = 30;
+  wsSurvey.getRow(14).height = 30;
+  wsSurvey.getRow(15).height = 30;
+  wsSurvey.getRow(16).height = 30;
+  label('A11:D12', '물건 소재지');
+  value('E11:AF12', locationVal);
+  label('A13:D14', '송달주소');
+  value('E13:AF14', repVal);
+  label('A15:D16', '사업자등록증상 소재지');
+  value('E15:AF16', bizLocationVal);
+
+  const yn = checked => checked ? 'Y' : 'N';
+  section('A17:AF17', '조사 체크 정보');
+  label('A18:D18', '지구외');
+  label('E18:H18', '자가/임차');
+  label('I18:L18', '건축물대장');
+  label('M18:P18', '영업장');
+  label('Q18:T18', '거주');
+  label('U18:X18', '전기');
+  label('Y18:AB18', '수도');
+  label('AC18:AF18', '정화조');
+  value('A19:D19', yn(db.survey.outOfDistrict), 'center');
+  value('E19:H19', db.survey.rentType || '', 'center');
+  value('I19:L19', yn(db.survey.hasLedger), 'center');
+  value('M19:P19', yn(db.survey.isBusiness), 'center');
+  value('Q19:T19', yn(db.survey.isResidence), 'center');
+  value('U19:X19', yn(db.survey.hasElectricity), 'center');
+  value('Y19:AB19', yn(db.survey.hasWater), 'center');
+  value('AC19:AF19', yn(db.survey.hasSeptic), 'center');
+
+  section('A21:AF21', '평면도 및 현장사진');
+  wsSurvey.getRow(22).height = 22;
+  for (let r = 23; r <= 41; r++) wsSurvey.getRow(r).height = 18;
+  wsSurvey.getRow(42).height = 22;
+  merge('A22:AF42', db.survey.photo ? '' : '평면도 또는 현장사진이 등록되지 않았습니다.', {
+    fill: colors.muted,
+    font: { name: '맑은 고딕', size: 11, color: { argb: '64748B' } },
+    alignment: { vertical: 'middle', horizontal: 'center', wrapText: true }
+  });
+
+  if (db.survey.photo) {
+    const imgId = workbook.addImage({
+      base64: db.survey.photo,
+      extension: 'jpeg'
+    });
+    wsSurvey.addImage(imgId, {
+      tl: { col: 0.2, row: 21.2 },
+      br: { col: 31.8, row: 41.8 }
+    });
+  }
+
+  section('A43:AF43', '특기사항');
+  for (let r = 44; r <= 48; r++) wsSurvey.getRow(r).height = 20;
+  value('A44:AF48', db.survey.notes || '');
+
+  section('A50:AF50', '서명 정보');
+  label('A51:D51', '조사일자');
+  value('E51:L51', db.survey.date || '', 'center');
+  label('M51:P51', '조사자 성명');
+  value('Q51:X51', db.survey.surveyor || '', 'center');
+  label('Y51:AB51', '입회자 성명');
+  value('AC51:AF51', db.survey.witness || '', 'center');
+  label('A52:D52', '확인자 성명');
+  value('E52:L52', db.survey.owner || '', 'center');
+  value('M52:AF52', '(인)', 'right');
+
+  wsSurvey.views = [{ showGridLines: false }];
+}
+
+function getExcelImageExtension(mimeType, extension) {
+  const ext = (extension || '').toLowerCase();
+  const type = (mimeType || '').toLowerCase();
+  if (type.includes('png') || ext === 'png') return 'png';
+  if (type.includes('jpg') || type.includes('jpeg') || ext === 'jpg' || ext === 'jpeg') return 'jpeg';
+  return '';
+}
+
+function rebuildDocumentsWorksheet(workbook) {
+  const existing = workbook.getWorksheet('추가제출서류');
+  if (existing) workbook.removeWorksheet(existing.id);
+
+  const wsDocs = workbook.addWorksheet('추가제출서류');
+  wsDocs.views = [{ showGridLines: false }];
+  wsDocs.pageSetup = {
+    paperSize: 9,
+    orientation: 'portrait',
+    fitToPage: true,
+    fitToWidth: 1,
+    fitToHeight: 0,
+    margins: { left: 0.25, right: 0.25, top: 0.35, bottom: 0.35, header: 0.1, footer: 0.1 }
+  };
+
+  wsDocs.columns = [
+    { width: 6 },
+    { width: 22 },
+    { width: 22 },
+    { width: 12 },
+    { width: 12 },
+    { width: 16 },
+    { width: 38 }
+  ];
+
+  const border = {
+    top: { style: 'thin', color: { argb: 'CBD5E1' } },
+    left: { style: 'thin', color: { argb: 'CBD5E1' } },
+    bottom: { style: 'thin', color: { argb: 'CBD5E1' } },
+    right: { style: 'thin', color: { argb: 'CBD5E1' } }
+  };
+
+  wsDocs.mergeCells('A1:G1');
+  const title = wsDocs.getCell('A1');
+  title.value = '추가 제출서류 정리';
+  title.font = { name: '맑은 고딕', size: 16, bold: true, color: { argb: 'FFFFFF' } };
+  title.alignment = { vertical: 'middle', horizontal: 'center' };
+  title.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '1E3A8A' } };
+  title.border = border;
+  wsDocs.getRow(1).height = 30;
+
+  [
+    ['소유자', db.survey.owner || '', '물건 소재지', compactAddressFromDong(db.survey.location) || ''],
+    ['조사일자', db.survey.date || '', '조사자', db.survey.surveyor || '']
+  ].forEach((rowValues, index) => {
+    const row = wsDocs.getRow(index + 2);
+    row.values = rowValues;
+    row.height = 22;
+    row.eachCell((cell, col) => {
+      cell.border = border;
+      cell.alignment = { vertical: 'middle', horizontal: col % 2 === 1 ? 'center' : 'left', wrapText: true };
+      cell.font = { name: '맑은 고딕', size: 10, bold: col % 2 === 1 };
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: col % 2 === 1 ? 'EFF6FF' : 'FFFFFF' }
+      };
+    });
+  });
+
+  const header = wsDocs.getRow(5);
+  header.values = ['번호', '저장 파일명', '원본 파일명', '확장자', '등록여부', '미리보기', '비고'];
+  header.height = 24;
+  header.eachCell(cell => {
+    cell.font = { name: '맑은 고딕', size: 10, bold: true, color: { argb: '1E3A8A' } };
+    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'DBEAFE' } };
+    cell.border = border;
+  });
+
+  const docs = db.documents.length ? db.documents : [{
+    filename: '',
+    originalName: '',
+    extension: '',
+    mimeType: '',
+    image: ''
+  }];
+
+  docs.forEach((documentItem, index) => {
+    const rowNum = 6 + (index * 9);
+    for (let r = rowNum; r < rowNum + 9; r++) {
+      wsDocs.getRow(r).height = 18;
+      for (let c = 1; c <= 7; c++) {
+        const cell = wsDocs.getRow(r).getCell(c);
+        cell.border = border;
+        cell.font = { name: '맑은 고딕', size: 10 };
+        cell.alignment = { vertical: 'middle', horizontal: c === 7 ? 'left' : 'center', wrapText: true };
+      }
+    }
+
+    wsDocs.mergeCells(`A${rowNum}:A${rowNum + 8}`);
+    wsDocs.mergeCells(`B${rowNum}:B${rowNum + 8}`);
+    wsDocs.mergeCells(`C${rowNum}:C${rowNum + 8}`);
+    wsDocs.mergeCells(`D${rowNum}:D${rowNum + 8}`);
+    wsDocs.mergeCells(`E${rowNum}:E${rowNum + 8}`);
+    wsDocs.mergeCells(`F${rowNum}:F${rowNum + 8}`);
+    wsDocs.mergeCells(`G${rowNum}:G${rowNum + 8}`);
+
+    wsDocs.getCell(`A${rowNum}`).value = index + 1;
+    wsDocs.getCell(`B${rowNum}`).value = documentItem.filename
+      ? `${sanitizeFilename(documentItem.filename, `추가제출서류_${index + 1}`)}.${documentItem.extension || 'jpg'}`
+      : '';
+    wsDocs.getCell(`C${rowNum}`).value = documentItem.originalName || '';
+    wsDocs.getCell(`D${rowNum}`).value = documentItem.extension || '';
+    wsDocs.getCell(`E${rowNum}`).value = documentItem.image ? '등록' : '미등록';
+    wsDocs.getCell(`G${rowNum}`).value = documentItem.image ? '' : '추가 제출서류 사진이 등록되지 않았습니다.';
+
+    const imageExt = getExcelImageExtension(documentItem.mimeType, documentItem.extension);
+    if (documentItem.image && imageExt) {
+      const imgId = workbook.addImage({
+        base64: documentItem.image,
+        extension: imageExt
+      });
+      wsDocs.addImage(imgId, {
+        tl: { col: 5.1, row: rowNum - 0.85 },
+        br: { col: 5.9, row: rowNum + 7.9 }
+      });
+    } else if (documentItem.image) {
+      wsDocs.getCell(`G${rowNum}`).value = '엑셀 미리보기는 JPG/PNG만 지원합니다. 원본 파일은 ZIP 폴더에 저장됩니다.';
+    }
+  });
 }
 
 // Generate Excel Workbook buffer using ExcelJS
 async function generateExcelBuffer() {
   log('엑셀 생성 고속 연동 가동...');
+
+  // Re-read address inputs immediately before export so searched or manually
+  // edited values are always reflected in the generated workbook.
+  syncAddressFieldsFromForm();
   
   if (typeof TEMPLATE_BASE64 === 'undefined') {
     throw new Error('템플릿 데이터가 준비되지 않았습니다.');
@@ -1005,10 +1728,18 @@ async function generateExcelBuffer() {
   const workbook = new ExcelJS.Workbook();
   const arrayBuffer = base64ToArrayBuffer(TEMPLATE_BASE64);
   await workbook.xlsx.load(arrayBuffer);
+  const oldSurveySheet = workbook.getWorksheet('조사서') || workbook.getWorksheet('기본조사서');
+  if (oldSurveySheet) {
+    workbook.removeWorksheet(oldSurveySheet.id);
+  }
+  const wsDigitalSurvey = workbook.addWorksheet('기본조사서');
+  log('기본조사서 시트를 디지털 입력폼 기준으로 새로 생성 중...');
+  rebuildSurveyWorksheet(workbook, wsDigitalSurvey);
+  workbook.views = [{ activeTab: workbook.worksheets.indexOf(wsDigitalSurvey) }];
   
   // --- 1. Fill Sheet: '조사서' ---
   const wsSurvey = workbook.getWorksheet('조사서');
-  if (wsSurvey) {
+  if (false && wsSurvey) {
     log('기본조사서 시트 기입 중...');
     
     // The template already has the correct layout and merges.
@@ -1016,9 +1747,22 @@ async function generateExcelBuffer() {
     
     // Write original survey values
     wsSurvey.getCell('F6').value = db.survey.company || '';
-    wsSurvey.getCell('S6').value = db.survey.bizType || '';
+    wsSurvey.getCell('S6').value = [
+      db.survey.bizType ? `업종: ${db.survey.bizType}` : '',
+      db.survey.bizStatus ? `업태: ${db.survey.bizStatus}` : ''
+    ].filter(Boolean).join('\n');
+    wsSurvey.getCell('S6').alignment = Object.assign({}, wsSurvey.getCell('S6').alignment, {
+      wrapText: true,
+      vertical: 'middle'
+    });
     
-    const locationVal = formatExcelAddress(db.survey.location, db.survey.locationRoad, db.survey.locationZip, db.survey.locationDetail);
+    const locationVal = addOutOfDistrictMarker(formatExcelAddress(
+      db.survey.location,
+      db.survey.locationRoad,
+      db.survey.locationZip,
+      db.survey.locationDetail,
+      db.survey.locationJibun
+    ));
     const cellF8 = wsSurvey.getCell('F8');
     cellF8.value = locationVal;
     cellF8.alignment = Object.assign({}, cellF8.alignment, { wrapText: true, vertical: 'middle' });
@@ -1026,7 +1770,13 @@ async function generateExcelBuffer() {
     wsSurvey.getCell('H10').value = db.survey.repName || '';
     wsSurvey.getCell('U10').value = db.survey.repJumin || '';
     
-    const repVal = formatExcelAddress(db.survey.repAddr, db.survey.repRoad, db.survey.repZip, db.survey.repDetail);
+    const repVal = formatExcelAddress(
+      db.survey.repAddr,
+      db.survey.repRoad,
+      db.survey.repZip,
+      db.survey.repDetail,
+      db.survey.repJibun
+    );
     const cellH12 = wsSurvey.getCell('H12');
     cellH12.value = repVal;
     cellH12.alignment = Object.assign({}, cellH12.alignment, { wrapText: true, vertical: 'middle' });
@@ -1037,8 +1787,22 @@ async function generateExcelBuffer() {
     wsSurvey.getCell('U14').value = db.survey.corpRegNo || '';
     
     // Write new fields
-    wsSurvey.getCell('F16').value = db.survey.bizLocation || '';
-    wsSurvey.getCell('F18').value = db.survey.itemLocation || '';
+    wsSurvey.getCell('F16').value = formatExcelAddress(
+      db.survey.bizLocation,
+      db.survey.bizLocationRoad,
+      db.survey.bizLocationZip,
+      db.survey.bizLocationDetail,
+      db.survey.bizLocationJibun
+    );
+    wsSurvey.getCell('F16').alignment = Object.assign({}, wsSurvey.getCell('F16').alignment, {
+      wrapText: true,
+      vertical: 'middle'
+    });
+    wsSurvey.getCell('F18').value = locationVal;
+    wsSurvey.getCell('F18').alignment = Object.assign({}, wsSurvey.getCell('F18').alignment, {
+      wrapText: true,
+      vertical: 'middle'
+    });
     
     // Booleans Values
     wsSurvey.getCell('C22').value = db.survey.outOfDistrict ? 'Y' : 'N';
@@ -1046,7 +1810,15 @@ async function generateExcelBuffer() {
     wsSurvey.getCell('J22').value = db.survey.hasLedger ? 'Y' : 'N';
     wsSurvey.getCell('O22').value = db.survey.isBusiness ? 'Y' : 'N';
     wsSurvey.getCell('T22').value = db.survey.isResidence ? 'Y' : 'N';
-    wsSurvey.getCell('X22').value = db.survey.permitNotes || '';
+    const utilityNotes = [
+      db.survey.hasElectricity ? '전기' : '',
+      db.survey.hasWater ? '수도' : '',
+      db.survey.hasSeptic ? '정화조' : ''
+    ].filter(Boolean);
+    wsSurvey.getCell('X22').value = [
+      db.survey.permitNotes || '',
+      utilityNotes.length ? `부대시설: ${utilityNotes.join(', ')}` : ''
+    ].filter(Boolean).join('\n');
     
     // Shifted down by 8 rows total (below Row 18)
     wsSurvey.getCell('C29').value = db.survey.notes || '';
@@ -1133,7 +1905,7 @@ async function generateExcelBuffer() {
       row.getCell(5).value = (qtyVal === '' ? '' : (isNaN(qtyNum) ? qtyVal : qtyNum));
       row.getCell(6).value = item.unit || '';
       row.getCell(7).value = item.remarks || '';
-      row.getCell(8).value = item.location || '';
+      row.getCell(8).value = compactAddressFromDong(item.location || db.survey.location || '');
       row.getCell(9).value = item.hasLedger ? '유' : '무';
       row.getCell(10).value = item.isBusiness ? '영업장' : '비영업장';
       row.getCell(11).value = item.isResidence ? '거주' : '비거주';
@@ -1203,7 +1975,7 @@ async function generateExcelBuffer() {
     
     // Top headers
     wsPhotos.getCell('D3').value = db.survey.owner || '';
-    wsPhotos.getCell('O3').value = db.survey.location || '';
+    wsPhotos.getCell('O3').value = compactAddressFromDong(db.survey.location) || '';
     
     // Dynamic Sheet Expansion for A4 page copies
     const totalPhotos = db.items.length;
@@ -1319,8 +2091,12 @@ async function generateExcelBuffer() {
         log(`사진 #${index + 1} 엑셀 시트 결합 성공 (Row: ${photoRowStart})`);
       }
     });
+
   }
   
+  log('추가 제출서류 정리 시트 생성 중...');
+  rebuildDocumentsWorksheet(workbook);
+
   return await workbook.xlsx.writeBuffer();
 }
 
@@ -1336,6 +2112,46 @@ function openpyxlColLetter(col) {
   return letter;
 }
 
+async function createZipPackage(type = "blob") {
+  const excelBuffer = await generateExcelBuffer();
+  const zip = new JSZip();
+
+  const ownerName = db.survey.owner || '공통';
+  const dateStr = db.survey.date ? db.survey.date.replace(/-/g, '') : new Date().toISOString().split('T')[0].replace(/-/g, '');
+  const filenameBase = `조사보고서_${ownerName}_${dateStr}`;
+
+  zip.file(`${filenameBase}.xlsx`, excelBuffer);
+
+  const floorPlanFolder = zip.folder("01_평면도");
+  if (db.survey.photo) {
+    floorPlanFolder.file("00_현장전경_평면도.jpg", base64ToArrayBuffer(db.survey.photo));
+  }
+
+  const photoLogFolder = zip.folder("02_사진대지");
+  db.items.forEach((item, index) => {
+    const activePhoto = item.compositeImage || item.image;
+    if (!activePhoto) return;
+    const nameClean = sanitizeFilename(item.name || '미입력', '미입력').replace(/[. ]/g, '_');
+    photoLogFolder.file(
+      `사진_${index + 1}_${nameClean}.jpg`,
+      base64ToArrayBuffer(activePhoto)
+    );
+  });
+
+  const documentsFolder = zip.folder("03_추가제출서류");
+  db.documents.forEach((documentItem, index) => {
+    if (!documentItem.image) return;
+    const filename = sanitizeFilename(documentItem.filename, `추가제출서류_${index + 1}`);
+    documentsFolder.file(
+      `${String(index + 1).padStart(2, '0')}_${filename}.${documentItem.extension}`,
+      base64ToArrayBuffer(documentItem.image)
+    );
+  });
+
+  const content = await zip.generateAsync({ type });
+  return { content, filenameBase, ownerName, dateStr };
+}
+
 // ZIP Compression and Download trigger
 async function downloadZipArchive() {
   const progressBar = document.getElementById('progressBar');
@@ -1343,41 +2159,7 @@ async function downloadZipArchive() {
   
   log('ZIP 압축 패키징 준비 중...');
   try {
-    const excelBuffer = await generateExcelBuffer();
-    progressBar.style.width = '60%';
-    
-    const zip = new JSZip();
-    
-    // Add Excel document
-    const ownerName = db.survey.owner || '공통';
-    const dateStr = db.survey.date ? db.survey.date.replace(/-/g, '') : new Date().toISOString().split('T')[0].replace(/-/g, '');
-    const filenameBase = `조사보고서_${ownerName}_${dateStr}`;
-    
-    zip.file(`${filenameBase}.xlsx`, excelBuffer);
-    
-    // Add photo files
-    const photosFolder = zip.folder("현장사진");
-    
-    // Add site panorama/floor plan if exists
-    if (db.survey.photo) {
-      const pData = base64ToArrayBuffer(db.survey.photo);
-      photosFolder.file("00_현장전경_평면도.jpg", pData);
-    }
-    
-    // Add photo log photos
-    db.items.forEach((item, index) => {
-      const activePhoto = item.compositeImage || item.image;
-      if (activePhoto) {
-        const photoData = base64ToArrayBuffer(activePhoto);
-        const nameClean = (item.name || '미입력').replace(/[\/\\?%*:|"<>. ]/g, '_');
-        photosFolder.file(`사진_${index + 1}_${nameClean}.jpg`, photoData);
-      }
-    });
-    
-    progressBar.style.width = '80%';
-    log('ZIP 압축 파일 빌드 시작...');
-    
-    const content = await zip.generateAsync({ type: "blob" });
+    const { content, filenameBase } = await createZipPackage("blob");
     
     progressBar.style.width = '100%';
     log('다운로드 파일 생성 완료!', 'success');
@@ -1398,7 +2180,6 @@ async function downloadZipArchive() {
     alert(`파일 생성 실패: ${err.message}`);
   }
 }
-
 // Simulated Email Transmit using client-side API
 async function sendEmailWithZip() {
   const recipient = document.getElementById('emailRecipient').value.trim();
@@ -1412,81 +2193,38 @@ async function sendEmailWithZip() {
   progressBar.style.width = '30%';
   
   try {
-    const excelBuffer = await generateExcelBuffer();
-    progressBar.style.width = '70%';
-    
-    // Construct base64 payload of generated files
-    const zip = new JSZip();
-    const ownerName = db.survey.owner || '공통';
-    const dateStr = db.survey.date ? db.survey.date.replace(/-/g, '') : new Date().toISOString().split('T')[0].replace(/-/g, '');
-    const filenameBase = `조사보고서_${ownerName}_${dateStr}`;
-    
-    zip.file(`${filenameBase}.xlsx`, excelBuffer);
-    
-    db.items.forEach((item, index) => {
-      const activePhoto = item.compositeImage || item.image;
-      if (activePhoto) {
-        const photoData = base64ToArrayBuffer(activePhoto);
-        const nameClean = (item.name || '미입력').replace(/[\/\\?%*:|"<>. ]/g, '_');
-        zip.file(`현장사진/사진_${index + 1}_${nameClean}.jpg`, photoData);
-      }
-    });
-    
-    const zipBlob = await zip.generateAsync({ type: "base64" });
+    const {
+      content: zipBlob,
+      filenameBase,
+      ownerName,
+      dateStr
+    } = await createZipPackage("base64");
     progressBar.style.width = '90%';
     
     // --- Google Apps Script / Email Webhook Integration ---
-    // If the user configures a webhook URL, we can POST the base64 string to it.
-    // Otherwise, we guide them on how to link their Google Apps Script for FREE.
-    const googleScriptUrl = localStorage.getItem('google_apps_script_url') || '';
+    // ⚠️ 아래 작은따옴표 안에 본인의 구글 웹 앱 URL 주소를 그대로 붙여넣으세요!
+    const googleScriptUrl = 'https://script.google.com/macros/s/AKfycbw3PC2x2h7v2cx3ZyQ6jtfyNiFie1ENzjridqG3DltvRCAco10dYg9OHUQ-JUMMIpK-/exec';
     
-    if (googleScriptUrl) {
-      // Real API transmission
-      const response = await fetch(googleScriptUrl, {
-        method: 'POST',
-        mode: 'no-cors', // standard for GAS webapps
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          recipient: recipient,
-          owner: ownerName,
-          date: dateStr,
-          subject: `[현장조사보고서] ${ownerName} (${dateStr})`,
-          body: `자동 생성된 현장조사 보고서 및 사진 대지 압축파일이 첨부되었습니다.\n\n공사명/소재지: ${db.survey.location || '미지정'}\n조사자: ${db.survey.surveyor || '미입력'}`,
-          attachmentBase64: zipBlob,
-          attachmentName: `${filenameBase}.zip`
-        })
-      });
-      
-      log('구글 앱스 스크립트 메일 발송 API 호출 완료!', 'success');
-      alert('구글 앱스 스크립트(Gmail)를 통해 성공적으로 메일이 발송되었습니다.');
-    } else {
-      // Demo Mode & Guidance
-      progressBar.style.width = '100%';
-      log('메일 발송 준비 완료 (서버리스 전송 가이드 모드)', 'warning');
-      
-      const setupScript = confirm(
-        `[이메일 전송 연동 안내]\n\n` +
-        `본 앱은 서버가 없는 클라이언트 앱이므로, 개인 Gmail 계정으로 이메일을 무료로 자동 발송하기 위해 간단한 '구글 앱스 스크립트' 설정이 필요합니다.\n\n` +
-        `설정 주소 등록 창을 띄울까요? (확인을 누르시면 설정 방법 안내 및 주소 입력창이 뜹니다.)`
-      );
-      
-      if (setupScript) {
-        const url = prompt(
-          `설정 순서:\n` +
-          `1. 구글 드라이브 -> Google Apps Script 생성\n` +
-          `2. GmailApp.sendEmail 코드 붙여넣기 및 배포 (안내 파일 참조)\n` +
-          `3. 생성된 '웹 앱 URL' 주소를 아래에 입력:\n`,
-          googleScriptUrl
-        );
-        
-        if (url) {
-          localStorage.setItem('google_apps_script_url', url.trim());
-          log('구글 앱스 스크립트 웹앱 주소가 저장되었습니다. 다시 발송 버튼을 누르시면 실제 발송됩니다.', 'success');
-        }
-      }
-    }
+    // Real API transmission (수정이나 팝업창 없이 바로 발송)
+    const response = await fetch(googleScriptUrl, {
+      method: 'POST',
+      mode: 'no-cors', // standard for GAS webapps
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        recipient: recipient,
+        owner: ownerName,
+        date: dateStr,
+        subject: `[현장조사보고서] ${ownerName} (${dateStr})`,
+        body: `자동 생성된 현장조사 보고서 및 사진 대지 압축파일이 첨부되었습니다.\n\n공사명/소재지: ${db.survey.location || '미지정'}\n조사자: ${db.survey.surveyor || '미입력'}`,
+        attachmentBase64: zipBlob,
+        attachmentName: `${filenameBase}.zip`
+      })
+    });
+    
+    log('구글 앱스 스크립트 메일 발송 API 호출 완료!', 'success');
+    alert('구글 앱스 스크립트(Gmail)를 통해 성공적으로 메일이 발송되었습니다.');
     
     setTimeout(() => {
       progressBar.style.width = '0%';
