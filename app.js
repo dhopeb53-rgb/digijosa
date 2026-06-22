@@ -37,6 +37,8 @@ let db = {
     bizLocationZip: '',
     bizLocationDetail: '',
     outOfDistrict: false, // Out of District Status
+    repOutOfDistrict: false,
+    bizOutOfDistrict: false,
     hasLedger: false,
     isBusiness: false,
     isResidence: false,
@@ -162,31 +164,15 @@ function formatCorpNo(val) {
   return val.slice(0, 6) + '-' + val.slice(6, 13);
 }
 
-// Format address with optional road name address, zip code, and detailed address for Excel sheet
 function formatExcelAddress(primary, road, zip, detail, jibun) {
   let mainAddress = primary || '';
   if (detail) {
     mainAddress = mainAddress ? `${mainAddress} ${detail}` : detail;
   }
-  
-  let val = mainAddress;
-  const alternateRoad = road && road !== primary ? road : '';
-  const alternateJibun = jibun && jibun !== primary ? jibun : '';
-  
-  const subParts = [];
-  if (alternateRoad) subParts.push(`도로명: ${alternateRoad}`);
-  if (alternateJibun) subParts.push(`지번: ${alternateJibun}`);
-  if (zip) subParts.push(`우편번호: ${zip}`);
-
-  if (subParts.length) {
-    const sub = `(${subParts.join(' / ')})`;
-    if (val) {
-      val += `\n${sub}`;
-    } else {
-      val = sub;
-    }
+  if (zip) {
+    mainAddress += `\n(우편번호: ${zip})`;
   }
-  return val;
+  return mainAddress;
 }
 
 function compactAddressFromDong(address) {
@@ -199,8 +185,8 @@ function compactAddressFromDong(address) {
   return value;
 }
 
-function addOutOfDistrictMarker(value) {
-  if (!db.survey.outOfDistrict || !value) return value;
+function addOutOfDistrictMarker(value, checked) {
+  if (!checked || !value) return value;
   return value.startsWith('(지구외)') ? value : `(지구외) ${value}`;
 }
 
@@ -246,8 +232,10 @@ function syncAddressFieldsFromForm() {
   Object.values(ADDRESS_CONFIG).forEach(config => {
     const input = document.getElementById(config.inputId);
     const detailInput = document.getElementById(config.detailId);
+    const zipInput = document.getElementById(config.postcodeId);
     if (input) db.survey[config.mainKey] = input.value.trim();
     if (detailInput) db.survey[config.detailKey] = detailInput.value.trim();
+    if (zipInput) db.survey[config.zipKey] = zipInput.value.trim();
   });
 }
 
@@ -277,23 +265,39 @@ function openAddressSearch(target) {
 
   new Postcode({
     oncomplete(data) {
-      const primary = data.jibunAddress
-        || data.autoJibunAddress
-        || data.roadAddress
-        || data.autoRoadAddress;
-      const input = document.getElementById(config.inputId);
-      const detailInput = document.getElementById(config.detailId);
+      try {
+        const primary = data.address
+          || data.jibunAddress
+          || data.autoJibunAddress
+          || data.roadAddress
+          || data.autoRoadAddress
+          || '';
+        const input = document.getElementById(config.inputId);
+        const detailInput = document.getElementById(config.detailId);
 
-      db.survey[config.roadKey] = data.roadAddress || data.autoRoadAddress || '';
-      db.survey[config.jibunKey] = data.jibunAddress || data.autoJibunAddress || '';
-      db.survey[config.zipKey] = data.zonecode || '';
+        db.survey[config.roadKey] = data.roadAddress || data.autoRoadAddress || '';
+        db.survey[config.jibunKey] = data.jibunAddress || data.autoJibunAddress || '';
+        db.survey[config.zipKey] = data.zonecode || '';
 
-      input.value = primary || '';
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      updateAddressMeta(config);
-      closeAddressSearch();
-      detailInput.focus();
-      log(`${input.previousElementSibling ? input.previousElementSibling.textContent : '주소'} 검색 완료.`);
+        if (input) {
+          input.value = primary;
+          try {
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+          } catch (eventError) {
+            console.error('주소 입력 이벤트 처리 실패:', eventError);
+          }
+        }
+        updateAddressMeta(config);
+        closeAddressSearch();
+        if (detailInput) {
+          detailInput.focus();
+        }
+        log(`${input && input.previousElementSibling ? input.previousElementSibling.textContent : '주소'} 검색 완료.`);
+      } catch (err) {
+        console.error('주소 선택 완료 처리 중 오류 발생:', err);
+        alert('주소 입력 중 오류가 발생했습니다: ' + err.message);
+        closeAddressSearch();
+      }
     },
     width: '100%',
     height: '100%'
@@ -456,19 +460,17 @@ window.addEventListener('DOMContentLoaded', async () => {
   if (outOfDistrictEl) {
     outOfDistrictEl.addEventListener('change', (e) => {
       db.survey.outOfDistrict = e.target.checked;
-      document.querySelectorAll('.address-district-check').forEach(check => {
-        check.checked = e.target.checked;
-      });
     });
   }
 
   document.querySelectorAll('.address-district-check').forEach(check => {
     check.addEventListener('change', (e) => {
-      db.survey.outOfDistrict = e.target.checked;
-      outOfDistrictEl.checked = e.target.checked;
-      document.querySelectorAll('.address-district-check').forEach(other => {
-        other.checked = e.target.checked;
-      });
+      const targetType = e.target.dataset.addressCheck; // 'rep' or 'biz'
+      if (targetType === 'rep') {
+        db.survey.repOutOfDistrict = e.target.checked;
+      } else if (targetType === 'biz') {
+        db.survey.bizOutOfDistrict = e.target.checked;
+      }
     });
   });
 
@@ -1413,12 +1415,12 @@ function rebuildSurveyWorksheet(workbook, wsSurvey) {
   });
 
   const colors = {
-    title: '1E3A8A',
-    section: 'DBEAFE',
-    label: 'EFF6FF',
+    title: 'FFFFFF',
+    section: 'FFFFFF',
+    label: 'FFFFFF',
     value: 'FFFFFF',
     border: '94A3B8',
-    muted: 'F8FAFC'
+    muted: 'FFFFFF'
   };
   const thinBorder = {
     top: { style: 'thin', color: { argb: colors.border } },
@@ -1444,23 +1446,23 @@ function rebuildSurveyWorksheet(workbook, wsSurvey) {
 
   const section = (range, value) => merge(range, value, {
     fill: colors.section,
-    font: { name: '맑은 고딕', size: 11, bold: true, color: { argb: '1E3A8A' } }
+    font: { name: '맑은 고딕', size: 11, bold: true, color: { argb: '000000' } }
   });
   const label = (range, value) => merge(range, value, {
     fill: colors.label,
-    font: { name: '맑은 고딕', size: 10, bold: true, color: { argb: '334155' } }
+    font: { name: '맑은 고딕', size: 10, bold: true, color: { argb: '000000' } }
   });
   const value = (range, text, align = 'left') => merge(range, text, {
     fill: colors.value,
-    font: { name: '맑은 고딕', size: 10, color: { argb: '111827' } },
+    font: { name: '맑은 고딕', size: 10, color: { argb: '000000' } },
     alignment: { vertical: 'middle', horizontal: align, wrapText: true }
   });
 
   wsSurvey.getRow(1).height = 24;
   wsSurvey.getRow(2).height = 24;
-  merge('A1:AF2', '디지털 기본조사서', {
+  merge('A1:AF2', '기본조사서', {
     fill: colors.title,
-    font: { name: '맑은 고딕', size: 18, bold: true, color: { argb: 'FFFFFF' } },
+    font: { name: '맑은 고딕', size: 18, bold: true, color: { argb: '000000' } },
     alignment: { vertical: 'middle', horizontal: 'center' }
   });
 
@@ -1494,21 +1496,21 @@ function rebuildSurveyWorksheet(workbook, wsSurvey) {
     db.survey.locationZip,
     db.survey.locationDetail,
     db.survey.locationJibun
-  ));
-  const repVal = formatExcelAddress(
+  ), db.survey.outOfDistrict);
+  const repVal = addOutOfDistrictMarker(formatExcelAddress(
     db.survey.repAddr,
     db.survey.repRoad,
     db.survey.repZip,
     db.survey.repDetail,
     db.survey.repJibun
-  );
-  const bizLocationVal = formatExcelAddress(
+  ), db.survey.repOutOfDistrict);
+  const bizLocationVal = addOutOfDistrictMarker(formatExcelAddress(
     db.survey.bizLocation,
     db.survey.bizLocationRoad,
     db.survey.bizLocationZip,
     db.survey.bizLocationDetail,
     db.survey.bizLocationJibun
-  );
+  ), db.survey.bizOutOfDistrict);
 
   section('A10:AF10', '주소 정보');
   wsSurvey.getRow(11).height = 30;
@@ -1549,7 +1551,7 @@ function rebuildSurveyWorksheet(workbook, wsSurvey) {
   wsSurvey.getRow(42).height = 22;
   merge('A22:AF42', db.survey.photo ? '' : '평면도 또는 현장사진이 등록되지 않았습니다.', {
     fill: colors.muted,
-    font: { name: '맑은 고딕', size: 11, color: { argb: '64748B' } },
+    font: { name: '맑은 고딕', size: 11, color: { argb: '000000' } },
     alignment: { vertical: 'middle', horizontal: 'center', wrapText: true }
   });
 
@@ -1625,9 +1627,9 @@ function rebuildDocumentsWorksheet(workbook) {
   wsDocs.mergeCells('A1:G1');
   const title = wsDocs.getCell('A1');
   title.value = '추가 제출서류 정리';
-  title.font = { name: '맑은 고딕', size: 16, bold: true, color: { argb: 'FFFFFF' } };
+  title.font = { name: '맑은 고딕', size: 16, bold: true, color: { argb: '000000' } };
   title.alignment = { vertical: 'middle', horizontal: 'center' };
-  title.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '1E3A8A' } };
+  title.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF' } };
   title.border = border;
   wsDocs.getRow(1).height = 30;
 
@@ -1641,11 +1643,11 @@ function rebuildDocumentsWorksheet(workbook) {
     row.eachCell((cell, col) => {
       cell.border = border;
       cell.alignment = { vertical: 'middle', horizontal: col % 2 === 1 ? 'center' : 'left', wrapText: true };
-      cell.font = { name: '맑은 고딕', size: 10, bold: col % 2 === 1 };
+      cell.font = { name: '맑은 고딕', size: 10, bold: col % 2 === 1, color: { argb: '000000' } };
       cell.fill = {
         type: 'pattern',
         pattern: 'solid',
-        fgColor: { argb: col % 2 === 1 ? 'EFF6FF' : 'FFFFFF' }
+        fgColor: { argb: 'FFFFFF' }
       };
     });
   });
@@ -1654,9 +1656,9 @@ function rebuildDocumentsWorksheet(workbook) {
   header.values = ['번호', '저장 파일명', '원본 파일명', '확장자', '등록여부', '미리보기', '비고'];
   header.height = 24;
   header.eachCell(cell => {
-    cell.font = { name: '맑은 고딕', size: 10, bold: true, color: { argb: '1E3A8A' } };
+    cell.font = { name: '맑은 고딕', size: 10, bold: true, color: { argb: '000000' } };
     cell.alignment = { vertical: 'middle', horizontal: 'center' };
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'DBEAFE' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF' } };
     cell.border = border;
   });
 
@@ -1713,387 +1715,236 @@ function rebuildDocumentsWorksheet(workbook) {
   });
 }
 
+function applyTableCellStyle(cell, options = {}) {
+  cell.font = options.font || { name: '맑은 고딕', size: 10 };
+  cell.alignment = options.alignment || { vertical: 'middle', horizontal: 'center', wrapText: true };
+  cell.fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: options.fill || 'FFFFFF' }
+  };
+  cell.border = {
+    top: { style: 'thin', color: { argb: 'CBD5E1' } },
+    left: { style: 'thin', color: { argb: 'CBD5E1' } },
+    bottom: { style: 'thin', color: { argb: 'CBD5E1' } },
+    right: { style: 'thin', color: { argb: 'CBD5E1' } }
+  };
+}
+
+function rebuildItemsWorksheet(workbook) {
+  const wsItems = workbook.addWorksheet('물건내역');
+  wsItems.views = [{ showGridLines: false }];
+  wsItems.pageSetup = {
+    paperSize: 9,
+    orientation: 'landscape',
+    fitToPage: true,
+    fitToWidth: 1,
+    fitToHeight: 0,
+    margins: { left: 0.25, right: 0.25, top: 0.35, bottom: 0.35, header: 0.1, footer: 0.1 }
+  };
+
+  wsItems.columns = [
+    { width: 6 },
+    { width: 14 },
+    { width: 22 },
+    { width: 34 },
+    { width: 10 },
+    { width: 10 },
+    { width: 24 },
+    { width: 22 },
+    { width: 12 },
+    { width: 12 },
+    { width: 12 }
+  ];
+
+  wsItems.mergeCells('A1:K1');
+  const title = wsItems.getCell('A1');
+  title.value = '물건내역';
+  applyTableCellStyle(title, {
+    fill: 'FFFFFF',
+    font: { name: '맑은 고딕', size: 16, bold: true, color: { argb: '000000' } },
+    alignment: { vertical: 'middle', horizontal: 'center' }
+  });
+  wsItems.getRow(1).height = 30;
+
+  wsItems.mergeCells('A2:B2');
+  wsItems.getCell('A2').value = '소유자';
+  wsItems.mergeCells('C2:E2');
+  wsItems.getCell('C2').value = db.survey.owner || '';
+  wsItems.mergeCells('F2:G2');
+  wsItems.getCell('F2').value = '물건 소재지';
+  wsItems.mergeCells('H2:K2');
+  wsItems.getCell('H2').value = compactAddressFromDong(db.survey.location) || '';
+  ['A2', 'C2', 'F2', 'H2'].forEach(ref => {
+    applyTableCellStyle(wsItems.getCell(ref), {
+      fill: 'FFFFFF',
+      font: { name: '맑은 고딕', size: 10, bold: ['A2', 'F2'].includes(ref), color: { argb: '000000' } },
+      alignment: { vertical: 'middle', horizontal: ['A2', 'F2'].includes(ref) ? 'center' : 'left', wrapText: true }
+    });
+  });
+
+  const headers = ['번호', '물건유형', '물건명', '구조 및 규격', '수량', '단위', '비고', '물건 소재지', '건축물대장', '영업장', '거주'];
+  const headerRow = wsItems.getRow(4);
+  headerRow.values = headers;
+  headerRow.height = 24;
+  headerRow.eachCell(cell => {
+    applyTableCellStyle(cell, {
+      fill: 'FFFFFF',
+      font: { name: '맑은 고딕', size: 10, bold: true, color: { argb: '000000' } }
+    });
+  });
+
+  const rows = db.items.length ? db.items : [{
+    type: '',
+    name: '',
+    specs: '',
+    qty: '',
+    unit: '',
+    remarks: '',
+    location: '',
+    hasLedger: false,
+    isBusiness: false,
+    isResidence: false
+  }];
+
+  rows.forEach((item, index) => {
+    const row = wsItems.getRow(5 + index);
+    row.height = 28;
+    row.values = [
+      index + 1,
+      item.type || '',
+      item.name || '',
+      item.specs || '',
+      item.qty || '',
+      item.unit || '',
+      item.remarks || '',
+      compactAddressFromDong(item.location || db.survey.location || ''),
+      item.hasLedger ? 'Y' : 'N',
+      item.isBusiness ? 'Y' : 'N',
+      item.isResidence ? 'Y' : 'N'
+    ];
+    row.eachCell((cell, col) => {
+      applyTableCellStyle(cell, {
+        fill: 'FFFFFF',
+        alignment: {
+          vertical: 'middle',
+          horizontal: [3, 4, 7, 8].includes(col) ? 'left' : 'center',
+          wrapText: true
+        }
+      });
+    });
+  });
+
+  return wsItems;
+}
+
+function rebuildPhotoWorksheet(workbook) {
+  const wsPhotos = workbook.addWorksheet('사진대지');
+  wsPhotos.views = [{ showGridLines: false }];
+  wsPhotos.pageSetup = {
+    paperSize: 9,
+    orientation: 'portrait',
+    fitToPage: true,
+    fitToWidth: 1,
+    fitToHeight: 0,
+    margins: { left: 0.25, right: 0.25, top: 0.35, bottom: 0.35, header: 0.1, footer: 0.1 }
+  };
+  wsPhotos.columns = Array.from({ length: 12 }, () => ({ width: 8 }));
+
+  wsPhotos.mergeCells('A1:L1');
+  applyTableCellStyle(wsPhotos.getCell('A1'), {
+    fill: 'FFFFFF',
+    font: { name: '맑은 고딕', size: 16, bold: true, color: { argb: '000000' } },
+    alignment: { vertical: 'middle', horizontal: 'center' }
+  });
+  wsPhotos.getCell('A1').value = '사진대지';
+  wsPhotos.getRow(1).height = 30;
+
+  wsPhotos.mergeCells('A2:B2');
+  wsPhotos.getCell('A2').value = '소유자';
+  wsPhotos.mergeCells('C2:F2');
+  wsPhotos.getCell('C2').value = db.survey.owner || '';
+  wsPhotos.mergeCells('G2:H2');
+  wsPhotos.getCell('G2').value = '소재지';
+  wsPhotos.mergeCells('I2:L2');
+  wsPhotos.getCell('I2').value = compactAddressFromDong(db.survey.location) || '';
+  ['A2', 'C2', 'G2', 'I2'].forEach(ref => {
+    applyTableCellStyle(wsPhotos.getCell(ref), {
+      fill: 'FFFFFF',
+      font: { name: '맑은 고딕', size: 10, bold: ['A2', 'G2'].includes(ref), color: { argb: '000000' } },
+      alignment: { vertical: 'middle', horizontal: ['A2', 'G2'].includes(ref) ? 'center' : 'left', wrapText: true }
+    });
+  });
+
+  const items = db.items.length ? db.items : [{ name: '', specs: '', qty: '', unit: '', image: '', compositeImage: '' }];
+  items.forEach((item, index) => {
+    const blockTop = 4 + index * 13;
+    const isLeft = index % 2 === 0;
+    const colStart = isLeft ? 'A' : 'G';
+    const colEnd = isLeft ? 'F' : 'L';
+    const labelRow = blockTop + 9;
+
+    wsPhotos.mergeCells(`${colStart}${blockTop}:${colEnd}${blockTop + 8}`);
+    wsPhotos.mergeCells(`${colStart}${labelRow}:${colEnd}${labelRow + 2}`);
+    for (let r = blockTop; r <= labelRow + 2; r++) {
+      wsPhotos.getRow(r).height = r <= blockTop + 8 ? 18 : 20;
+      for (let c = isLeft ? 1 : 7; c <= (isLeft ? 6 : 12); c++) {
+        applyTableCellStyle(wsPhotos.getRow(r).getCell(c), {
+          fill: 'FFFFFF',
+          font: { name: '맑은 고딕', size: 10, color: { argb: '000000' } },
+          alignment: { vertical: 'middle', horizontal: 'center', wrapText: true }
+        });
+      }
+    }
+
+    const desc = getCompositeItemDesc(item) || `사진 #${index + 1}`;
+    wsPhotos.getCell(`${colStart}${labelRow}`).value = desc;
+
+    const activePhoto = item.compositeImage || item.image;
+    if (activePhoto) {
+      const imgId = workbook.addImage({
+        base64: activePhoto,
+        extension: 'jpeg'
+      });
+      wsPhotos.addImage(imgId, {
+        tl: { col: isLeft ? 0.1 : 6.1, row: blockTop - 0.85 },
+        br: { col: isLeft ? 5.9 : 11.9, row: blockTop + 7.8 }
+      });
+    } else {
+      wsPhotos.getCell(`${colStart}${blockTop}`).value = '사진 없음';
+    }
+  });
+
+  return wsPhotos;
+}
+
 // Generate Excel Workbook buffer using ExcelJS
 async function generateExcelBuffer() {
-  log('엑셀 생성 고속 연동 가동...');
+  log('엑셀 생성 고속 연동 가동 (깨끗한 새 통합문서)...');
 
   // Re-read address inputs immediately before export so searched or manually
   // edited values are always reflected in the generated workbook.
   syncAddressFieldsFromForm();
   
-  if (typeof TEMPLATE_BASE64 === 'undefined') {
-    throw new Error('템플릿 데이터가 준비되지 않았습니다.');
-  }
-  
   const workbook = new ExcelJS.Workbook();
-  const arrayBuffer = base64ToArrayBuffer(TEMPLATE_BASE64);
-  await workbook.xlsx.load(arrayBuffer);
-  const oldSurveySheet = workbook.getWorksheet('조사서') || workbook.getWorksheet('기본조사서');
-  if (oldSurveySheet) {
-    workbook.removeWorksheet(oldSurveySheet.id);
-  }
+  
+  // 1. 기본조사서
   const wsDigitalSurvey = workbook.addWorksheet('기본조사서');
-  log('기본조사서 시트를 디지털 입력폼 기준으로 새로 생성 중...');
+  log('기본조사서 시트 생성 중...');
   rebuildSurveyWorksheet(workbook, wsDigitalSurvey);
-  workbook.views = [{ activeTab: workbook.worksheets.indexOf(wsDigitalSurvey) }];
   
-  // --- 1. Fill Sheet: '조사서' ---
-  const wsSurvey = workbook.getWorksheet('조사서');
-  if (false && wsSurvey) {
-    log('기본조사서 시트 기입 중...');
-    
-    // The template already has the correct layout and merges.
-    // Just map values to the static cell coordinates.
-    
-    // Write original survey values
-    wsSurvey.getCell('F6').value = db.survey.company || '';
-    wsSurvey.getCell('S6').value = [
-      db.survey.bizType ? `업종: ${db.survey.bizType}` : '',
-      db.survey.bizStatus ? `업태: ${db.survey.bizStatus}` : ''
-    ].filter(Boolean).join('\n');
-    wsSurvey.getCell('S6').alignment = Object.assign({}, wsSurvey.getCell('S6').alignment, {
-      wrapText: true,
-      vertical: 'middle'
-    });
-    
-    const locationVal = addOutOfDistrictMarker(formatExcelAddress(
-      db.survey.location,
-      db.survey.locationRoad,
-      db.survey.locationZip,
-      db.survey.locationDetail,
-      db.survey.locationJibun
-    ));
-    const cellF8 = wsSurvey.getCell('F8');
-    cellF8.value = locationVal;
-    cellF8.alignment = Object.assign({}, cellF8.alignment, { wrapText: true, vertical: 'middle' });
-    
-    wsSurvey.getCell('H10').value = db.survey.repName || '';
-    wsSurvey.getCell('U10').value = db.survey.repJumin || '';
-    
-    const repVal = formatExcelAddress(
-      db.survey.repAddr,
-      db.survey.repRoad,
-      db.survey.repZip,
-      db.survey.repDetail,
-      db.survey.repJibun
-    );
-    const cellH12 = wsSurvey.getCell('H12');
-    cellH12.value = repVal;
-    cellH12.alignment = Object.assign({}, cellH12.alignment, { wrapText: true, vertical: 'middle' });
-    
-    wsSurvey.getCell('U12').value = db.survey.repContact || '';
-    
-    wsSurvey.getCell('F14').value = db.survey.bizRegNo || '';
-    wsSurvey.getCell('U14').value = db.survey.corpRegNo || '';
-    
-    // Write new fields
-    wsSurvey.getCell('F16').value = formatExcelAddress(
-      db.survey.bizLocation,
-      db.survey.bizLocationRoad,
-      db.survey.bizLocationZip,
-      db.survey.bizLocationDetail,
-      db.survey.bizLocationJibun
-    );
-    wsSurvey.getCell('F16').alignment = Object.assign({}, wsSurvey.getCell('F16').alignment, {
-      wrapText: true,
-      vertical: 'middle'
-    });
-    wsSurvey.getCell('F18').value = locationVal;
-    wsSurvey.getCell('F18').alignment = Object.assign({}, wsSurvey.getCell('F18').alignment, {
-      wrapText: true,
-      vertical: 'middle'
-    });
-    
-    // Booleans Values
-    wsSurvey.getCell('C22').value = db.survey.outOfDistrict ? 'Y' : 'N';
-    wsSurvey.getCell('F22').value = db.survey.rentType || '';
-    wsSurvey.getCell('J22').value = db.survey.hasLedger ? 'Y' : 'N';
-    wsSurvey.getCell('O22').value = db.survey.isBusiness ? 'Y' : 'N';
-    wsSurvey.getCell('T22').value = db.survey.isResidence ? 'Y' : 'N';
-    const utilityNotes = [
-      db.survey.hasElectricity ? '전기' : '',
-      db.survey.hasWater ? '수도' : '',
-      db.survey.hasSeptic ? '정화조' : ''
-    ].filter(Boolean);
-    wsSurvey.getCell('X22').value = [
-      db.survey.permitNotes || '',
-      utilityNotes.length ? `부대시설: ${utilityNotes.join(', ')}` : ''
-    ].filter(Boolean).join('\n');
-    
-    // Shifted down by 8 rows total (below Row 18)
-    wsSurvey.getCell('C29').value = db.survey.notes || '';
-    
-    // Date formatter shifted down by 8 rows (A26 -> A34)
-    if (db.survey.date) {
-      const dateStr = db.survey.date.trim();
-      const match = dateStr.match(/^(\d{4})[-.\/](\d{1,2})[-.\/](\d{1,2})$/);
-      if (match) {
-        const year = match[1];
-        const month = match[2].padStart(2, '0');
-        const day = match[3].padStart(2, '0');
-        wsSurvey.getCell('A34').value = `○ 조사일자 :   ${year}.   ${month}.   ${day}.`;
-      } else {
-        wsSurvey.getCell('A34').value = `○ 조사일자 : ${dateStr}`;
-      }
-    }
-    
-    // Signatures shifted down by 8 rows (O26 -> O34, O28 -> O36)
-    wsSurvey.getCell('O34').value = `○ 조사자 :                               ${db.survey.surveyor || ''}  (인)`;
-    wsSurvey.getCell('O36').value = `○ 입회자 :                               ${db.survey.witness || ''}  (인)`;
-    
-    // Embed Panorama Photo shifted down by 8 rows (C16:AD20 -> C24:AD28)
-    if (db.survey.photo) {
-      const imgId = workbook.addImage({
-        base64: db.survey.photo,
-        extension: 'jpeg'
-      });
-      wsSurvey.addImage(imgId, {
-        tl: { col: 2, row: 23 }, // Col C (2), Row 24 (23)
-        br: { col: 30, row: 28 }  // Col AD (30), Row 28 (28)
-      });
-      log('기본조사서 전경/평면도 이미지 삽입 완료.');
-    }
-  }
+  // Set active tab to the first sheet (기본조사서)
+  workbook.views = [{ activeTab: 0 }];
   
-  // --- 2. Fill Sheet: '물건내역(영업)' ---
-  const wsItems = workbook.getWorksheet('물건내역(영업)');
-  if (wsItems) {
-    log('물건내역 시트 작성 및 동적 확장 처리 중...');
-    
-    // Set headers for extra columns
-    const headerRow = wsItems.getRow(2);
-    headerRow.getCell(8).value = '물건소재지';
-    headerRow.getCell(9).value = '건축물대장 유무';
-    headerRow.getCell(10).value = '영업장 여부';
-    headerRow.getCell(11).value = '거주 여부';
-    headerRow.getCell(8).style = headerRow.getCell(7).style;
-    headerRow.getCell(9).style = headerRow.getCell(7).style;
-    headerRow.getCell(10).style = headerRow.getCell(7).style;
-    headerRow.getCell(11).style = headerRow.getCell(7).style;
-    
-    // Set column widths
-    wsItems.getColumn(8).width = 25;
-    wsItems.getColumn(9).width = 15;
-    wsItems.getColumn(10).width = 15;
-    wsItems.getColumn(11).width = 15;
-    
-    // Write items to sheet. Insert rows dynamically if it exceeds 4 default slots.
-    db.items.forEach((item, index) => {
-      const rowNum = EXCEL_ITEM_START_ROW + index;
-      
-      // If we exceed default pre-filled rows, insert row in ExcelJS
-      if (index >= EXCEL_DEFAULT_ITEMS_COUNT) {
-        wsItems.insertRow(rowNum, [], 'i');
-      }
-      
-      const row = wsItems.getRow(rowNum);
-      const templateRow = wsItems.getRow(EXCEL_ITEM_START_ROW);
-      
-      // Copy styling for all columns 1 to 11
-      for (let col = 1; col <= 11; col++) {
-        if (index >= EXCEL_DEFAULT_ITEMS_COUNT || col > 7) {
-          row.getCell(col).style = templateRow.getCell(col > 7 ? 7 : col).style;
-        }
-      }
-      
-      row.getCell(1).value = index + 1;
-      row.getCell(2).value = item.type || '';
-      row.getCell(3).value = item.name || '';
-      row.getCell(4).value = item.specs || '';
-      const qtyVal = item.qty ? item.qty.toString().trim() : '';
-      const qtyNum = Number(qtyVal);
-      row.getCell(5).value = (qtyVal === '' ? '' : (isNaN(qtyNum) ? qtyVal : qtyNum));
-      row.getCell(6).value = item.unit || '';
-      row.getCell(7).value = item.remarks || '';
-      row.getCell(8).value = compactAddressFromDong(item.location || db.survey.location || '');
-      row.getCell(9).value = item.hasLedger ? '유' : '무';
-      row.getCell(10).value = item.isBusiness ? '영업장' : '비영업장';
-      row.getCell(11).value = item.isResidence ? '거주' : '비거주';
-      
-      // Align override
-      row.getCell(8).alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
-      row.getCell(9).alignment = { vertical: 'middle', horizontal: 'center' };
-      row.getCell(10).alignment = { vertical: 'middle', horizontal: 'center' };
-      row.getCell(11).alignment = { vertical: 'middle', horizontal: 'center' };
-      
-      // Set alignment and border height
-      row.height = 24;
-    });
-    
-    // Delete unused default placeholder rows if the item count is less than default (4)
-    if (db.items.length < EXCEL_DEFAULT_ITEMS_COUNT) {
-      const start = EXCEL_ITEM_START_ROW + db.items.length;
-      const count = EXCEL_DEFAULT_ITEMS_COUNT - db.items.length;
-      wsItems.spliceRows(start, count);
-    }
-    
-    // Merge consecutive cells with identical values in columns H, I, J, K (8, 9, 10, 11)
-    if (db.items.length > 1) {
-      const columnsToMerge = [8, 9, 10, 11];
-      const startRow = EXCEL_ITEM_START_ROW;
-      const endRow = EXCEL_ITEM_START_ROW + db.items.length - 1;
-      
-      columnsToMerge.forEach(col => {
-        let runStart = startRow;
-        while (runStart <= endRow) {
-          let val = wsItems.getRow(runStart).getCell(col).value;
-          let runEnd = runStart;
-          while (
-            runEnd + 1 <= endRow && 
-            wsItems.getRow(runEnd + 1).getCell(col).value === val && 
-            val !== undefined && 
-            val !== null && 
-            val.toString().trim() !== ''
-          ) {
-            runEnd++;
-          }
-          
-          if (runEnd > runStart) {
-            const startCell = `${openpyxlColLetter(col)}${runStart}`;
-            const endCell = `${openpyxlColLetter(col)}${runEnd}`;
-            try {
-              wsItems.mergeCells(`${startCell}:${endCell}`);
-              wsItems.getCell(startCell).alignment = { 
-                vertical: 'middle', 
-                horizontal: col === 8 ? 'left' : 'center', 
-                wrapText: true 
-              };
-            } catch (e) {
-              log(`셀 병합 실패 (${startCell}:${endCell}): ${e.message}`, 'warning');
-            }
-          }
-          runStart = runEnd + 1;
-        }
-      });
-    }
-  }
+  // 2. 물건내역
+  log('물건내역 시트 생성 중...');
+  rebuildItemsWorksheet(workbook);
   
-  // --- 3. Fill Sheet: ' 사진대지' (Note the space in name) ---
-  const wsPhotos = workbook.getWorksheet(' 사진대지') || workbook.getWorksheet('사진대지');
-  if (wsPhotos) {
-    log('사진대지 격자 양식 매칭 및 A4 페이지 단위 복제 중...');
-    
-    // Top headers
-    wsPhotos.getCell('D3').value = db.survey.owner || '';
-    wsPhotos.getCell('O3').value = compactAddressFromDong(db.survey.location) || '';
-    
-    // Dynamic Sheet Expansion for A4 page copies
-    const totalPhotos = db.items.length;
-    if (totalPhotos > 12) {
-      const extraPhotos = totalPhotos - 12;
-      const extraPagesNeeded = Math.ceil(extraPhotos / 6);
-      log(`사진 개수(${totalPhotos}장)가 12장 한도를 초과하여 ${extraPagesNeeded}개의 A4 페이지를 추가 생성합니다.`);
-      
-      // A4 page template height: rows 37 to 73 (Page 2) is exactly 37 rows
-      const templateStartRow = 37;
-      const templateEndRow = 73;
-      const pageSize = 37;
-      
-      for (let p = 0; p < extraPagesNeeded; p++) {
-        const destOffset = 74 + (p * pageSize);
-        
-        // Loop over the source rows of Page 2 template
-        for (let r = templateStartRow; r <= templateEndRow; r++) {
-          const srcRowNum = r;
-          const destRowNum = destOffset + (r - templateStartRow);
-          
-          const srcRow = wsPhotos.getRow(srcRowNum);
-          const destRow = wsPhotos.getRow(destRowNum);
-          
-          // Copy row height
-          destRow.height = srcRow.height;
-          
-          // Copy cells
-          for (let col = 1; col <= 22; col++) { // A to V
-            const srcCell = srcRow.getCell(col);
-            const destCell = destRow.getCell(col);
-            
-            destCell.value = srcCell.value;
-            destCell.style = srcCell.style;
-          }
-        }
-        
-        // Copy merged cells configuration for this page
-        // Page 2 merged ranges fall within row 37 to 73. Shift them down by offset.
-        const sourceMergedRanges = wsPhotos.mergedCells; // List of merged coordinate strings
-        const pageOffset = 37 + (p * pageSize);
-        
-        // We will collect merges to prevent mutating list during iteration
-        const newMerges = [];
-        wsPhotos.mergedCells.forEach(coord => {
-          // Parse coordinates like A37:V38
-          const parts = coord.split(':');
-          if (parts.length === 2) {
-            const startCell = wsPhotos.getCell(parts[0]);
-            const endCell = wsPhotos.getCell(parts[1]);
-            
-            // Check if this merge is strictly part of the Page 2 template (rows 37-73)
-            if (startCell.row >= templateStartRow && endCell.row <= templateEndRow) {
-              const newStartRow = startCell.row + pageOffset;
-              const newEndRow = endCell.row + pageOffset;
-              
-              const newStartCol = openpyxlColLetter(startCell.col);
-              const newEndCol = openpyxlColLetter(endCell.col);
-              
-              newMerges.push(`${newStartCol}${newStartRow}:${newEndCol}${newEndRow}`);
-            }
-          }
-        });
-        
-        // Apply new merged cells
-        newMerges.forEach(coord => {
-          try {
-            wsPhotos.mergeCells(coord);
-          } catch(e) {}
-        });
-      }
-    }
-    
-    // Embed photo list
-    db.items.forEach((item, index) => {
-      const pageIndex = Math.floor(index / 6);
-      const slotIndex = index % 6;
-      
-      // Calculate row numbers based on formula: (page * 37) + 5 + (row_group * 11)
-      const photoRowStart = (pageIndex * 37) + 5 + (Math.floor(slotIndex / 2) * 11);
-      const descRow = (pageIndex * 37) + 14 + (Math.floor(slotIndex / 2) * 11);
-      
-      let photoColStart, photoColEnd, descColStart, descColEnd;
-      
-      if (slotIndex % 2 === 0) { // Left Column
-        photoColStart = 2; // B
-        photoColEnd = 10;  // J
-        descColStart = 3;  // C
-        descColEnd = 11;   // K
-      } else { // Right Column
-        photoColStart = 13; // M
-        photoColEnd = 21;   // U
-        descColStart = 14;  // N
-        descColEnd = 22;    // V
-      }
-      
-      // Write photo description label (utilizing custom overrides if customized)
-      const itemDesc = getCompositeItemDesc(item);
-      wsPhotos.getCell(descRow, descColStart).value = itemDesc;
-      
-      // Embed composite photo
-      const activePhoto = item.compositeImage || item.image;
-      if (activePhoto) {
-        const imgId = workbook.addImage({
-          base64: activePhoto,
-          extension: 'jpeg'
-        });
-        
-        wsPhotos.addImage(imgId, {
-          tl: { col: photoColStart - 1, row: photoRowStart - 1 },
-          br: { col: photoColEnd, row: photoRowStart - 1 + 8 } // height is 8 rows
-        });
-        log(`사진 #${index + 1} 엑셀 시트 결합 성공 (Row: ${photoRowStart})`);
-      }
-    });
-
-  }
+  // 3. 사진대지
+  log('사진대지 시트 생성 중...');
+  rebuildPhotoWorksheet(workbook);
   
+  // 4. 추가제출서류
   log('추가 제출서류 정리 시트 생성 중...');
   rebuildDocumentsWorksheet(workbook);
 
@@ -2236,3 +2087,535 @@ async function sendEmailWithZip() {
     alert(`메일 전송 실패: ${err.message}`);
   }
 }
+
+// --- Drawing Board Feature ---
+let drawingState = {
+  isDrawing: false,
+  tool: 'pen', // pen, line, rect, circle, fill, text, eraser, rect-eraser
+  color: '#000000',
+  lineWidth: 3,
+  lineDash: 'solid', // solid, dashed
+  hatchPattern: 'solid',
+  fontSize: 16,
+  textContent: '',
+  history: [],
+  historyIndex: -1,
+  startX: 0,
+  startY: 0,
+  points: [] // stores points for pen line correction
+};
+
+function initDrawingBoard() {
+  const trigger = document.getElementById('btnDrawSurveyPhoto');
+  const modal = document.getElementById('drawingModal');
+  const canvas = document.getElementById('drawingCanvas');
+  const ctx = canvas.getContext('2d');
+  
+  if (!trigger || !modal || !canvas) return;
+
+  // Initialize canvas background to white
+  function clearCanvasToWhite() {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    saveState();
+  }
+
+  // Save history state
+  function saveState() {
+    const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    // If we drew something new, truncate any redo history
+    if (drawingState.historyIndex < drawingState.history.length - 1) {
+      drawingState.history = drawingState.history.slice(0, drawingState.historyIndex + 1);
+    }
+    drawingState.history.push(data);
+    drawingState.historyIndex++;
+    // Cap history size to 30 states to conserve memory
+    if (drawingState.history.length > 30) {
+      drawingState.history.shift();
+      drawingState.historyIndex--;
+    }
+  }
+
+  function undo() {
+    if (drawingState.historyIndex > 0) {
+      drawingState.historyIndex--;
+      ctx.putImageData(drawingState.history[drawingState.historyIndex], 0, 0);
+    }
+  }
+
+  function redo() {
+    if (drawingState.historyIndex < drawingState.history.length - 1) {
+      drawingState.historyIndex++;
+      ctx.putImageData(drawingState.history[drawingState.historyIndex], 0, 0);
+    }
+  }
+
+  // Color Swatch Selection
+  const swatches = document.querySelectorAll('.color-swatch');
+  const colorPicker = document.getElementById('drawingColorPicker');
+  swatches.forEach(swatch => {
+    swatch.addEventListener('click', () => {
+      swatches.forEach(s => s.classList.remove('active'));
+      swatch.classList.add('active');
+      const color = swatch.getAttribute('data-color');
+      drawingState.color = color;
+      colorPicker.value = color;
+    });
+  });
+  colorPicker.addEventListener('input', (e) => {
+    swatches.forEach(s => s.classList.remove('active'));
+    drawingState.color = e.target.value;
+  });
+
+  // Tool Selection
+  const toolBtns = document.querySelectorAll('.drawing-tool-btn');
+  const hatchGroup = document.getElementById('hatchGroup');
+  const textInputGroup = document.getElementById('textInputGroup');
+  
+  toolBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      toolBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const tool = btn.getAttribute('data-tool');
+      drawingState.tool = tool;
+      
+      // Toggle secondary setting displays
+      hatchGroup.style.display = (tool === 'fill') ? 'block' : 'none';
+      textInputGroup.style.display = (tool === 'text') ? 'block' : 'none';
+    });
+  });
+
+  // Line Width Selection
+  const lineWidthInput = document.getElementById('drawingLineWidth');
+  const lineWidthVal = document.getElementById('lineWidthVal');
+  lineWidthInput.addEventListener('input', (e) => {
+    drawingState.lineWidth = parseInt(e.target.value);
+    lineWidthVal.textContent = `${drawingState.lineWidth}px`;
+  });
+
+  // Hatch Pattern Selection
+  const hatchSelect = document.getElementById('drawingHatchPattern');
+  hatchSelect.addEventListener('change', (e) => {
+    drawingState.hatchPattern = e.target.value;
+  });
+
+  // Line Dash Selection
+  const lineDashSelect = document.getElementById('drawingLineDash');
+  if (lineDashSelect) {
+    lineDashSelect.addEventListener('change', (e) => {
+      drawingState.lineDash = e.target.value;
+    });
+  }
+
+  // Text / Font Selection
+  const textInput = document.getElementById('drawingTextContent');
+  textInput.addEventListener('input', (e) => {
+    drawingState.textContent = e.target.value;
+  });
+  const fontSizeSelect = document.getElementById('drawingFontSize');
+  fontSizeSelect.addEventListener('change', (e) => {
+    drawingState.fontSize = parseInt(e.target.value);
+  });
+
+  // Open drawing modal
+  trigger.addEventListener('click', () => {
+    modal.classList.remove('hidden');
+    // Clear state
+    drawingState.history = [];
+    drawingState.historyIndex = -1;
+    clearCanvasToWhite();
+    
+    // Lucide icons rendering
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+      window.lucide.createIcons();
+    }
+  });
+
+  // Close drawing modal
+  document.getElementById('btnCloseDrawing').addEventListener('click', () => {
+    modal.classList.add('hidden');
+  });
+
+  // Clear Canvas
+  document.getElementById('btnDrawingClear').addEventListener('click', () => {
+    if (confirm('그려진 내용을 모두 지우시겠습니까?')) {
+      clearCanvasToWhite();
+    }
+  });
+
+  // Undo/Redo Buttons
+  document.getElementById('btnDrawingUndo').addEventListener('click', undo);
+  document.getElementById('btnDrawingRedo').addEventListener('click', redo);
+
+  // Coordinate retrieval helper supporting mouse and touch
+  function getCoordinates(e) {
+    const rect = canvas.getBoundingClientRect();
+    // For scaling canvas if CSS width differs from actual resolution
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
+    let clientX, clientY;
+    if (e.touches && e.touches.length > 0) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+    
+    return {
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY
+    };
+  }
+
+  // --- FLOOD FILL ALGORITHM (supporting math hatch lines) ---
+  function hexToRgba(hex) {
+    let r = 0, g = 0, b = 0, a = 255;
+    const cleanHex = hex.replace('#', '');
+    if (cleanHex.length === 3) {
+      r = parseInt(cleanHex[0] + cleanHex[0], 16);
+      g = parseInt(cleanHex[1] + cleanHex[1], 16);
+      b = parseInt(cleanHex[2] + cleanHex[2], 16);
+    } else if (cleanHex.length === 6) {
+      r = parseInt(cleanHex.slice(0, 2), 16);
+      g = parseInt(cleanHex.slice(2, 4), 16);
+      b = parseInt(cleanHex.slice(4, 6), 16);
+    }
+    return { r, g, b, a };
+  }
+
+  function floodFill(startX, startY, fillHexColor, patternName) {
+    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imgData.data;
+    const width = canvas.width;
+    const height = canvas.height;
+
+    // Convert starting pixel coordinate
+    const targetIdx = (Math.floor(startY) * width + Math.floor(startX)) * 4;
+    const targetR = data[targetIdx];
+    const targetG = data[targetIdx + 1];
+    const targetB = data[targetIdx + 2];
+    const targetA = data[targetIdx + 3];
+
+    const fillRgba = hexToRgba(fillHexColor);
+
+    // If target and fill color are identical, stop to prevent infinite loop
+    const colorTolerance = 15; // allowance for minor compression/draw artifacts
+    function colorMatch(idx, r, g, b, a) {
+      return Math.abs(data[idx] - r) < colorTolerance &&
+             Math.abs(data[idx + 1] - g) < colorTolerance &&
+             Math.abs(data[idx + 2] - b) < colorTolerance &&
+             Math.abs(data[idx + 3] - a) < colorTolerance;
+    }
+
+    if (colorMatch(targetIdx, fillRgba.r, fillRgba.g, fillRgba.b, fillRgba.a) && patternName === 'solid') {
+      return;
+    }
+
+    // Stack-based flood fill (more stable than recursion)
+    const pixelStack = [[Math.floor(startX), Math.floor(startY)]];
+    const visited = new Uint8Array(width * height);
+
+    // Hatch pattern pixel check
+    const isHatchPixel = (x, y) => {
+      if (patternName === 'solid') return true;
+      const spacing = 12;
+      const thickness = 2.5;
+      if (patternName === 'hatch-diagonal') {
+        return (x + y) % spacing < thickness;
+      } else if (patternName === 'hatch-diagonal-back') {
+        return Math.abs(x - y) % spacing < thickness;
+      } else if (patternName === 'hatch-cross') {
+        return (x % spacing < thickness) || (y % spacing < thickness);
+      } else if (patternName === 'hatch-dots') {
+        return (x % spacing < 2) && (y % spacing < 2);
+      }
+      return true;
+    };
+
+    while (pixelStack.length > 0) {
+      const [currX, currY] = pixelStack.pop();
+      const idx = (currY * width + currX) * 4;
+      const visitedIdx = currY * width + currX;
+
+      if (visited[visitedIdx]) continue;
+      visited[visitedIdx] = 1;
+
+      if (colorMatch(idx, targetR, targetG, targetB, targetA)) {
+        // Paint pixel depending on hatch check
+        if (isHatchPixel(currX, currY)) {
+          data[idx] = fillRgba.r;
+          data[idx + 1] = fillRgba.g;
+          data[idx + 2] = fillRgba.b;
+          data[idx + 3] = fillRgba.a;
+        } else if (patternName !== 'solid') {
+          // If hatch spacing, color it white so we overwrite previous background
+          data[idx] = 255;
+          data[idx + 1] = 255;
+          data[idx + 2] = 255;
+          data[idx + 3] = 255;
+        }
+
+        // Push neighbors only if they are within bounds and not yet visited
+        if (currX + 1 < width && !visited[currY * width + (currX + 1)]) {
+          pixelStack.push([currX + 1, currY]);
+        }
+        if (currX - 1 >= 0 && !visited[currY * width + (currX - 1)]) {
+          pixelStack.push([currX - 1, currY]);
+        }
+        if (currY + 1 < height && !visited[(currY + 1) * width + currX]) {
+          pixelStack.push([currX, currY + 1]);
+        }
+        if (currY - 1 >= 0 && !visited[(currY - 1) * width + currX]) {
+          pixelStack.push([currX, currY - 1]);
+        }
+      }
+    }
+
+    ctx.putImageData(imgData, 0, 0);
+    saveState();
+  }
+
+  // --- HAND-DRAWN LINE SMOOTHING & STRAIGHTENING ---
+  function simplifyAndStraightenLine(points) {
+    if (points.length < 2) return null;
+    const start = points[0];
+    const end = points[points.length - 1];
+
+    // Compute straight line distance vs cumulative hand path length
+    const straightDist = Math.hypot(end.x - start.x, end.y - start.y);
+    let pathLength = 0;
+    for (let i = 1; i < points.length; i++) {
+      pathLength += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+    }
+
+    const ratio = pathLength > 0 ? straightDist / pathLength : 1;
+
+    // Snapping angle logic (Horizontal / Vertical)
+    function snapLine(pStart, pEnd) {
+      const dx = pEnd.x - pStart.x;
+      const dy = pEnd.y - pStart.y;
+      const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+      
+      let snappedEnd = { x: pEnd.x, y: pEnd.y };
+      const absAngle = Math.abs(angle);
+      const threshold = 8;
+      
+      if (absAngle < threshold || absAngle > 180 - threshold) {
+        snappedEnd.y = pStart.y;
+      } else if (Math.abs(absAngle - 90) < threshold) {
+        snappedEnd.x = pStart.x;
+      }
+      return snappedEnd;
+    }
+
+    // Straighten line threshold: if ratio is high enough
+    if (ratio > 0.88 && straightDist > 15) {
+      const snappedEnd = snapLine(start, end);
+      return {
+        type: 'line',
+        start: start,
+        end: snappedEnd
+      };
+    }
+
+    // Otherwise, apply basic Moving Average smoothing to clean up shakiness
+    const smoothed = [];
+    smoothed.push(start);
+    const windowSize = 5;
+    for (let i = 1; i < points.length - 1; i++) {
+      let sumX = 0, sumY = 0, count = 0;
+      const startOffset = Math.max(0, i - Math.floor(windowSize / 2));
+      const endOffset = Math.min(points.length - 1, i + Math.floor(windowSize / 2));
+      for (let j = startOffset; j <= endOffset; j++) {
+        sumX += points[j].x;
+        sumY += points[j].y;
+        count++;
+      }
+      smoothed.push({ x: sumX / count, y: sumY / count });
+    }
+    smoothed.push(end);
+    
+    return {
+      type: 'smooth-path',
+      points: smoothed
+    };
+  }
+
+  // --- DRAWING EVENT LISTENERS ---
+  let tempCanvasData = null;
+
+  function drawStart(e) {
+    e.preventDefault();
+    const coords = getCoordinates(e);
+    drawingState.isDrawing = true;
+    drawingState.startX = coords.x;
+    drawingState.startY = coords.y;
+    drawingState.points = [coords];
+
+    if (drawingState.tool === 'fill') {
+      floodFill(coords.x, coords.y, drawingState.color, drawingState.hatchPattern);
+      drawingState.isDrawing = false;
+    } else if (drawingState.tool === 'text') {
+      if (drawingState.textContent.trim() === '') {
+        alert('좌측 텍스트 입력창에 글자를 기재해 주세요.');
+        drawingState.isDrawing = false;
+        return;
+      }
+      ctx.fillStyle = drawingState.color;
+      ctx.font = `bold ${drawingState.fontSize}px "맑은 고딕", sans-serif`;
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'center';
+      ctx.fillText(drawingState.textContent, coords.x, coords.y);
+      saveState();
+      drawingState.isDrawing = false;
+    } else {
+      tempCanvasData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      ctx.lineWidth = drawingState.lineWidth;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      
+      // Set line dash
+      if (drawingState.tool === 'eraser' || drawingState.tool === 'rect-eraser' || drawingState.lineDash === 'solid') {
+        ctx.setLineDash([]);
+      } else if (drawingState.lineDash === 'dashed') {
+        const dashLen = Math.max(drawingState.lineWidth * 2, 6);
+        ctx.setLineDash([dashLen, dashLen]);
+      }
+      
+      ctx.strokeStyle = (drawingState.tool === 'eraser' || drawingState.tool === 'rect-eraser') ? '#ffffff' : drawingState.color;
+    }
+  }
+
+  function drawMove(e) {
+    if (!drawingState.isDrawing) return;
+    e.preventDefault();
+    const coords = getCoordinates(e);
+
+    if (drawingState.tool === 'pen' || drawingState.tool === 'eraser') {
+      ctx.beginPath();
+      const lastPoint = drawingState.points[drawingState.points.length - 1];
+      ctx.moveTo(lastPoint.x, lastPoint.y);
+      ctx.lineTo(coords.x, coords.y);
+      ctx.stroke();
+      drawingState.points.push(coords);
+    } else {
+      ctx.putImageData(tempCanvasData, 0, 0);
+      ctx.beginPath();
+      ctx.lineWidth = drawingState.lineWidth;
+      
+      // Set line dash preview
+      if (drawingState.tool === 'rect-eraser') {
+        ctx.setLineDash([4, 4]);
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = '#ef4444'; // Red dashed selection box for eraser
+      } else {
+        ctx.strokeStyle = drawingState.color;
+        if (drawingState.lineDash === 'solid') {
+          ctx.setLineDash([]);
+        } else if (drawingState.lineDash === 'dashed') {
+          const dashLen = Math.max(drawingState.lineWidth * 2, 6);
+          ctx.setLineDash([dashLen, dashLen]);
+        }
+      }
+      
+      const width = coords.x - drawingState.startX;
+      const height = coords.y - drawingState.startY;
+
+      if (drawingState.tool === 'line') {
+        ctx.moveTo(drawingState.startX, drawingState.startY);
+        ctx.lineTo(coords.x, coords.y);
+      } else if (drawingState.tool === 'rect') {
+        ctx.rect(drawingState.startX, drawingState.startY, width, height);
+      } else if (drawingState.tool === 'circle') {
+        const radius = Math.hypot(width, height);
+        ctx.arc(drawingState.startX, drawingState.startY, radius, 0, 2 * Math.PI);
+      } else if (drawingState.tool === 'rect-eraser') {
+        ctx.rect(drawingState.startX, drawingState.startY, width, height);
+      }
+      ctx.stroke();
+    }
+  }
+
+  function drawEnd(e) {
+    if (!drawingState.isDrawing) return;
+    e.preventDefault();
+    drawingState.isDrawing = false;
+
+    if (drawingState.tool === 'pen' && drawingState.points.length > 2) {
+      const result = simplifyAndStraightenLine(drawingState.points);
+      if (result) {
+        ctx.putImageData(tempCanvasData, 0, 0);
+        ctx.beginPath();
+        ctx.lineWidth = drawingState.lineWidth;
+        ctx.strokeStyle = drawingState.color;
+        
+        if (result.type === 'line') {
+          ctx.moveTo(result.start.x, result.start.y);
+          ctx.lineTo(result.end.x, result.end.y);
+          ctx.stroke();
+          log('손그림 선이 직선으로 보정되었습니다.', 'success');
+        } else if (result.type === 'smooth-path') {
+          ctx.moveTo(result.points[0].x, result.points[0].y);
+          for (let i = 1; i < result.points.length; i++) {
+            ctx.lineTo(result.points[i].x, result.points[i].y);
+          }
+          ctx.stroke();
+        }
+      }
+    } else if (drawingState.tool === 'rect-eraser') {
+      // Clear red dashed preview
+      ctx.putImageData(tempCanvasData, 0, 0);
+      
+      const coords = getCoordinates(e);
+      const x = Math.min(drawingState.startX, coords.x);
+      const y = Math.min(drawingState.startY, coords.y);
+      const w = Math.abs(coords.x - drawingState.startX);
+      const h = Math.abs(coords.y - drawingState.startY);
+      
+      if (w > 2 && h > 2) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(x, y, w, h);
+        log('선택한 영역이 성공적으로 지워졌습니다.', 'success');
+      }
+    }
+    tempCanvasData = null;
+    saveState();
+  }
+
+  // Bind Mouse Events
+  canvas.addEventListener('mousedown', drawStart);
+  canvas.addEventListener('mousemove', drawMove);
+  canvas.addEventListener('mouseup', drawEnd);
+  canvas.addEventListener('mouseleave', drawEnd);
+
+  // Bind Touch Events
+  canvas.addEventListener('touchstart', drawStart, { passive: false });
+  canvas.addEventListener('touchmove', drawMove, { passive: false });
+  canvas.addEventListener('touchend', drawEnd, { passive: false });
+
+  // Save drew canvas to surveyPhoto database
+  document.getElementById('btnDrawingSave').addEventListener('click', () => {
+    const imgBase64 = canvas.toDataURL('image/jpeg', 0.9).split(',')[1];
+    db.survey.photo = imgBase64;
+    
+    const previewContainer = document.querySelector('#surveyPhotoBox .preview-container');
+    const uploadPlaceholder = document.querySelector('#surveyPhotoBox .upload-placeholder');
+    const previewImg = document.getElementById('surveyPhotoPreview');
+    
+    if (previewContainer && uploadPlaceholder && previewImg) {
+      previewImg.src = `data:image/jpeg;base64,${imgBase64}`;
+      previewContainer.classList.remove('hidden');
+      uploadPlaceholder.classList.add('hidden');
+    }
+    
+    modal.classList.add('hidden');
+    log('그려진 평면도가 기본조사서 양식 사진으로 저장되었습니다.', 'success');
+  });
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+  initDrawingBoard();
+});

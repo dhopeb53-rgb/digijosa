@@ -761,7 +761,7 @@ textarea {
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 5;
+  z-index: 12;
   background-color: #ffffff;
 }
 
@@ -2117,4 +2117,363 @@ input:checked + .slider:before {
 .btn-close-modal:hover {
   color: var(--danger);
   background: rgba(239, 68, 68, 0.1);
+}
+
+/* Drawing Trigger Button */
+.btn-drawing-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--card-bg, #ffffff);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+.btn-drawing-trigger:hover {
+  background: var(--primary-light, #eff6ff);
+  border-color: var(--primary);
+  color: var(--primary);
+  transform: translateY(-1px);
+}
+.btn-drawing-trigger i {
+  width: 15px;
+  height: 15px;
+}
+
+/* Drawing Modal */
+.drawing-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 3100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(4px);
+}
+.drawing-modal.hidden {
+  display: none;
+}
+.drawing-modal-panel {
+  width: min(1024px, 100vw - 32px);
+  height: min(720px, 100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: #ffffff;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.35);
+}
+.drawing-modal-header {
+  flex: 0 0 54px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px 0 20px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary, #f8fafc);
+}
+.drawing-title-area {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+}
+.drawing-title-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--primary);
+}
+.drawing-title-area strong {
+  font-size: 15px;
+  font-weight: 700;
+}
+.drawing-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-drawing-action {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-drawing-action:hover {
+  background: #f1f5f9;
+  color: var(--text-primary);
+}
+.btn-drawing-action i {
+  width: 16px;
+  height: 16px;
+}
+.btn-close-drawing {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-close-drawing:hover {
+  background: #fee2e2;
+  color: #ef4444;
+}
+.btn-close-drawing i {
+  width: 18px;
+  height: 18px;
+}
+
+/* Body and Layout */
+.drawing-modal-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  height: calc(100% - 54px);
+}
+.drawing-sidebar {
+  width: 240px;
+  flex: 0 0 240px;
+  border-right: 1px solid var(--border-color);
+  background: #f8fafc;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+}
+.drawing-workspace {
+  flex: 1;
+  background: #e2e8f0;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+}
+#drawingCanvas {
+  background: #ffffff;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
+  border-radius: 4px;
+  cursor: crosshair;
+  background-image: linear-gradient(rgba(0,0,0,0.04) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(0,0,0,0.04) 1px, transparent 1px);
+  background-size: 20px 20px;
+  display: block;
+}
+
+/* Sidebar Tool Groups */
+.tool-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tool-group label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.tool-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.drawing-tool-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.drawing-tool-btn:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+.drawing-tool-btn.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #ffffff;
+}
+.drawing-tool-btn i {
+  width: 14px;
+  height: 14px;
+}
+
+.range-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+#drawingLineWidth {
+  flex: 1;
+  cursor: pointer;
+}
+#lineWidthVal {
+  font-size: 12px;
+  font-weight: 600;
+  width: 32px;
+  text-align: right;
+  color: var(--text-primary);
+}
+
+.color-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.color-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.15s;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);
+}
+.color-swatch:hover {
+  transform: scale(1.15);
+}
+.color-swatch.active {
+  border-color: #64748b;
+  transform: scale(1.1);
+}
+#drawingColorPicker {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  padding: 0;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+}
+
+#drawingHatchPattern, #drawingFontSize, #drawingTextContent {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: inherit;
+}
+#drawingTextContent:focus {
+  border-color: var(--primary);
+  outline: none;
+}
+
+.tool-group-bottom {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+.btn-drawing-save {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: #10b981;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-drawing-save:hover {
+  background: #059669;
+  transform: translateY(-1px);
+}
+.btn-drawing-save i {
+  width: 16px;
+  height: 16px;
+}
+
+/* Mobile responsive drawing layout */
+@media (max-width: 768px) {
+  .drawing-modal {
+    padding: 0;
+  }
+  .drawing-modal-panel {
+    width: 100vw;
+    height: 100vh;
+    border: 0;
+    border-radius: 0;
+  }
+  .drawing-modal-body {
+    flex-direction: column-reverse;
+  }
+  .drawing-sidebar {
+    width: 100%;
+    flex: 0 0 auto;
+    height: 180px;
+    border-right: 0;
+    border-top: 1px solid var(--border-color);
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 12px;
+  }
+  .drawing-sidebar .tool-group {
+    flex: 1 1 45%;
+    min-width: 100px;
+  }
+  .drawing-sidebar .tool-buttons {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .drawing-sidebar .drawing-tool-btn {
+    width: auto;
+    padding: 6px 10px;
+  }
+  .drawing-sidebar .tool-group-bottom {
+    width: 100%;
+    margin-top: 0;
+    border-top: 0;
+    padding-top: 0;
+  }
+  .drawing-workspace {
+    padding: 10px;
+  }
+  #drawingCanvas {
+    max-width: 100%;
+    height: auto;
+  }
 }

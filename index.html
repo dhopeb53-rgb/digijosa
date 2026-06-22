@@ -122,7 +122,7 @@
                   <button type="button" class="btn-address-search" data-address-target="location">
                     <i data-lucide="search"></i> 주소 검색
                   </button>
-                  <input type="text" class="address-postcode" id="location_postcode" placeholder="우편번호" readonly>
+                  <input type="text" class="address-postcode" id="location_postcode" placeholder="우편번호">
                   <input type="text" class="address-main" id="location_name" placeholder="지번주소">
                   <input type="text" id="location_detail" placeholder="동·층·호 등 상세주소 입력">
                   <label class="mini-checkbox-label">
@@ -139,7 +139,7 @@
                   <button type="button" class="btn-address-search" data-address-target="rep">
                     <i data-lucide="search"></i> 주소 검색
                   </button>
-                  <input type="text" class="address-postcode" id="rep_postcode" placeholder="우편번호" readonly>
+                  <input type="text" class="address-postcode" id="rep_postcode" placeholder="우편번호">
                   <input type="text" class="address-main" id="rep_addr" placeholder="지번주소">
                   <input type="text" id="rep_detail" placeholder="동·층·호 등 상세주소 입력">
                   <label class="mini-checkbox-label">
@@ -156,7 +156,7 @@
                   <button type="button" class="btn-address-search" data-address-target="biz">
                     <i data-lucide="search"></i> 주소 검색
                   </button>
-                  <input type="text" class="address-postcode" id="biz_postcode" placeholder="우편번호" readonly>
+                  <input type="text" class="address-postcode" id="biz_postcode" placeholder="우편번호">
                   <input type="text" class="address-main" id="biz_location" placeholder="지번주소">
                   <input type="text" id="biz_detail" placeholder="동·층·호 등 상세주소 입력">
                   <label class="mini-checkbox-label">
@@ -185,10 +185,12 @@
           </div>
         </div>
 
-        <div class="card glass-card collapsible-card collapsed" id="surveyPhotoCard">
+        <div class="card glass-card" id="surveyPhotoCard">
           <div class="card-header card-header-action">
             <h2><i data-lucide="image"></i> 현장 전경 또는 평면도 사진</h2>
-            <button type="button" class="btn-toggle-card" id="btnToggleSurveyPhotoCard">펼치기</button>
+            <button type="button" class="btn-drawing-trigger" id="btnDrawSurveyPhoto">
+              <i data-lucide="edit-3"></i> 평면도 직접 그리기
+            </button>
           </div>
           <div class="card-body">
             <p class="card-helper-text">기본조사서 중간 평면도 칸(C16:AD20)에 자동 삽입되는 사진입니다.</p>
@@ -300,6 +302,103 @@
         </button>
       </div>
       <div class="address-postcode-container" id="addressPostcodeContainer"></div>
+    </div>
+  </div>
+
+  <!-- Drawing Board Modal -->
+  <div class="drawing-modal hidden" id="drawingModal" role="dialog" aria-modal="true" aria-label="평면도 그리기">
+    <div class="drawing-modal-panel">
+      <div class="drawing-modal-header">
+        <div class="drawing-title-area">
+          <i data-lucide="palette" class="drawing-title-icon"></i>
+          <strong>평면도 직접 그리기</strong>
+        </div>
+        <div class="drawing-header-actions">
+          <button type="button" class="btn-drawing-action" id="btnDrawingUndo" title="되돌리기"><i data-lucide="undo-2"></i></button>
+          <button type="button" class="btn-drawing-action" id="btnDrawingRedo" title="다시실행"><i data-lucide="redo-2"></i></button>
+          <button type="button" class="btn-drawing-action" id="btnDrawingClear" title="전체 지우기"><i data-lucide="trash-2"></i></button>
+          <button type="button" class="btn-close-drawing" id="btnCloseDrawing" aria-label="그리기 닫기">
+            <i data-lucide="x"></i>
+          </button>
+        </div>
+      </div>
+      <div class="drawing-modal-body">
+        <!-- Tools Panel -->
+        <div class="drawing-sidebar">
+          <div class="tool-group">
+            <label>그리기 도구</label>
+            <div class="tool-buttons">
+              <button type="button" class="drawing-tool-btn active" data-tool="pen" title="선보정 펜"><i data-lucide="pencil"></i> 선보정 펜</button>
+              <button type="button" class="drawing-tool-btn" data-tool="line" title="직선"><i data-lucide="minus"></i> 직선</button>
+              <button type="button" class="drawing-tool-btn" data-tool="rect" title="사각형"><i data-lucide="square"></i> 사각형</button>
+              <button type="button" class="drawing-tool-btn" data-tool="circle" title="원"><i data-lucide="circle"></i> 원</button>
+              <button type="button" class="drawing-tool-btn" data-tool="fill" title="채우기 (페인트통)"><i data-lucide="paint-bucket"></i> 채우기</button>
+              <button type="button" class="drawing-tool-btn" data-tool="text" title="글자 입력"><i data-lucide="type"></i> 글자</button>
+              <button type="button" class="drawing-tool-btn" data-tool="eraser" title="지우개"><i data-lucide="eraser"></i> 지우개</button>
+              <button type="button" class="drawing-tool-btn" data-tool="rect-eraser" title="영역 지우기"><i data-lucide="crop"></i> 영역 지우기</button>
+            </div>
+          </div>
+          
+          <div class="tool-group">
+            <label>선 두께</label>
+            <div class="range-container">
+              <input type="range" id="drawingLineWidth" min="1" max="20" value="3">
+              <span id="lineWidthVal">3px</span>
+            </div>
+          </div>
+          
+          <div class="tool-group">
+            <label>선 종류</label>
+            <select id="drawingLineDash">
+              <option value="solid">실선 (―――)</option>
+              <option value="dashed">점선 (- - -)</option>
+            </select>
+          </div>
+
+          <div class="tool-group">
+            <label>색상 선택</label>
+            <div class="color-palette">
+              <button type="button" class="color-swatch active" data-color="#000000" style="background: #000000;"></button>
+              <button type="button" class="color-swatch" data-color="#ff0000" style="background: #ff0000;"></button>
+              <button type="button" class="color-swatch" data-color="#0000ff" style="background: #0000ff;"></button>
+              <button type="button" class="color-swatch" data-color="#00aa00" style="background: #00aa00;"></button>
+              <button type="button" class="color-swatch" data-color="#ff8c00" style="background: #ff8c00;"></button>
+              <input type="color" id="drawingColorPicker" value="#000000" title="사용자 색상">
+            </div>
+          </div>
+
+          <div class="tool-group" id="hatchGroup" style="display: none;">
+            <label>채우기 무늬</label>
+            <select id="drawingHatchPattern">
+              <option value="solid">단색 채우기</option>
+              <option value="hatch-diagonal">사선 해치 (///)</option>
+              <option value="hatch-diagonal-back">역사선 해치 (\\\)</option>
+              <option value="hatch-cross">격자 해치 (+++)</option>
+              <option value="hatch-dots">점 패턴 (...)</option>
+            </select>
+          </div>
+          
+          <div class="tool-group" id="textInputGroup" style="display: none;">
+            <label>입력할 텍스트</label>
+            <input type="text" id="drawingTextContent" placeholder="텍스트를 적어주세요.">
+            <select id="drawingFontSize" style="margin-top: 6px;">
+              <option value="12">작게 (12px)</option>
+              <option value="16" selected>보통 (16px)</option>
+              <option value="20">크게 (20px)</option>
+              <option value="28">더 크게 (28px)</option>
+            </select>
+          </div>
+          
+          <div class="tool-group-bottom">
+            <button type="button" class="btn-drawing-save" id="btnDrawingSave"><i data-lucide="check"></i> 평면도로 저장</button>
+          </div>
+        </div>
+        
+        <!-- Canvas Workspace -->
+        <div class="drawing-workspace">
+          <canvas id="drawingCanvas" width="800" height="600"></canvas>
+        </div>
+      </div>
     </div>
   </div>
 
