@@ -1906,15 +1906,17 @@ input:checked + .slider:before {
   white-space: nowrap;
 }
 
-@media (max-width: 650px) {
+@media (max-width: 760px) {
   .item-card-header {
     align-items: flex-start;
     flex-direction: column;
+    padding: 6px 8px;
   }
 
   .item-card-title-line {
     width: 100%;
     grid-template-columns: auto minmax(86px, 1fr);
+    gap: 5px;
   }
 
   .item-header-location,
@@ -1924,17 +1926,26 @@ input:checked + .slider:before {
 
   .item-card-actions {
     width: 100%;
-    justify-content: flex-end;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px 10px;
   }
 
-  .item-card-row-3 {
-    grid-template-columns: 1fr;
+  .item-header-location {
+    grid-template-columns: 64px minmax(0, 1fr);
+    width: 100%;
   }
 
+  .item-header-status,
   .item-status-row {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 4px;
+    width: 100%;
+  }
+
+  .item-card-row-3 {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -2035,48 +2046,61 @@ input:checked + .slider:before {
 }
 
 /* Mobile responsive configuration for item cards grid */
-@media (max-width: 650px) {
+@media (max-width: 760px) {
   .item-form-card .item-card-body {
-    padding: 6px;
-    gap: 4px;
+    padding: 7px 8px;
+    gap: 5px;
   }
+
   .item-card-row-1 {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) 54px 66px;
-    gap: 4px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 5px;
   }
+
+  .item-card-row-1 .form-group:nth-child(1),
+  .item-card-row-1 .form-group:nth-child(2) {
+    grid-column: 1 / -1;
+  }
+
   .item-card-row-1 .form-group label {
     font-size: 9px;
   }
+
   .item-card-row-1 input,
   .item-card-row-1 select,
   .item-card-row-1 textarea {
-    padding: 3px 4px;
-    font-size: 11px;
-    height: 26px;
+    padding: 5px 7px;
+    font-size: 12px;
+    height: 32px;
   }
+
   .item-card-row-1 .cell-qty {
-    padding: 3px 2px !important;
+    padding: 5px 7px !important;
     text-align: center !important;
   }
+
   .item-card-row-1 .cell-unit {
-    padding: 3px 2px !important;
+    padding: 5px 7px !important;
   }
+
   .item-card-row-1 .cell-unit-custom {
-    padding: 3px 4px;
-    font-size: 11px;
+    padding: 5px 7px;
+    font-size: 12px;
     margin-top: 4px;
-    height: 26px;
+    height: 32px;
   }
+
   .horizontal-group label {
     font-size: 10px;
     width: 72px;
     margin-top: 8px;
   }
   .item-card-row-2 {
-    gap: 4px;
+    gap: 5px;
     padding-top: 6px;
     margin-top: 2px;
   }
+
   .item-card-row-3 {
     grid-template-columns: 1fr;
     gap: 6px;
@@ -2089,20 +2113,22 @@ input:checked + .slider:before {
   }
   .item-card-row-1 textarea.cell-specs,
   .item-card-row-2 textarea.cell-specs {
-    height: 26px;
-    min-height: 26px;
-    padding: 3px 6px;
-    font-size: 11px;
+    height: 32px;
+    min-height: 32px;
+    padding: 5px 7px;
+    font-size: 12px;
   }
+
   .item-card-row-2 input.cell-remarks,
   .item-card-row-3 input.cell-location {
-    padding: 3px 6px;
-    font-size: 11px;
-    height: 26px;
+    padding: 5px 7px;
+    font-size: 12px;
+    height: 32px;
   }
+
   .checkbox-label-container {
-    height: 26px;
-    padding: 3px 6px;
+    height: 28px;
+    padding: 4px 6px;
     font-size: 11px;
     gap: 3px;
   }
