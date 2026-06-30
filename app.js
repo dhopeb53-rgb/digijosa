@@ -48,8 +48,10 @@ let db = {
     rentType: '자가',
     permitNotes: '',
     surveyorSignature: '',
-    witnessSignature: ''
+    witnessSignature: '',
+    ownershipMode: 'single'
   },
+  coOwners: [],
   items: [], // List of items/objects (Tab 2)
   documents: [] // Additional submitted photos
 };
@@ -190,6 +192,13 @@ function compactAddressFromDong(address) {
 function addOutOfDistrictMarker(value, checked) {
   if (!checked || !value) return value;
   return value.startsWith('(지구외)') ? value : `(지구외) ${value}`;
+}
+
+function getOwnerDisplayName() {
+  const owner = (db.survey.owner || '').trim();
+  const sharedCount = db.survey.ownershipMode === 'shared' ? db.coOwners.length : 0;
+  if (!owner) return sharedCount ? `공유자 ${sharedCount}명` : '';
+  return sharedCount ? `${owner} 외 ${sharedCount}인` : owner;
 }
 
 const ADDRESS_CONFIG = {
@@ -475,6 +484,83 @@ function initSignaturePad() {
   clearCanvas();
 }
 
+function updateCoOwnerSummary() {
+  const summary = document.getElementById('coOwnerSummary');
+  const modeSelect = document.getElementById('ownership_mode');
+  if (summary) summary.textContent = `공유자 ${db.coOwners.length}명`;
+  if (modeSelect) modeSelect.value = db.survey.ownershipMode || 'single';
+  syncSurveyHeadersToPhotos();
+}
+
+function addCoOwner(data = {}) {
+  db.coOwners.push({
+    id: Date.now() + Math.floor(Math.random() * 1000),
+    name: data.name || '',
+    jumin: data.jumin || '',
+    contact: data.contact || '',
+    share: data.share || '',
+    memo: data.memo || ''
+  });
+  renderCoOwners();
+}
+
+function removeCoOwner(id) {
+  db.coOwners = db.coOwners.filter(owner => owner.id !== id);
+  renderCoOwners();
+}
+
+function renderCoOwners() {
+  const section = document.getElementById('coOwnerSection');
+  const list = document.getElementById('coOwnerList');
+  if (!section || !list) return;
+
+  section.classList.toggle('hidden', db.survey.ownershipMode !== 'shared');
+  list.innerHTML = '';
+
+  if (db.survey.ownershipMode === 'shared' && db.coOwners.length === 0) {
+    list.innerHTML = `<div class="co-owner-empty">공유자를 추가하면 지분 정보를 함께 정리할 수 있습니다.</div>`;
+  }
+
+  db.coOwners.forEach((owner, index) => {
+    const card = document.createElement('div');
+    card.className = 'co-owner-card';
+    card.dataset.ownerId = owner.id;
+    card.innerHTML = `
+      <input type="text" class="co-owner-name" placeholder="공유자 #${index + 1} 성명" value="${owner.name}">
+      <input type="text" class="co-owner-jumin" placeholder="주민등록번호" value="${owner.jumin}">
+      <input type="text" class="co-owner-contact" placeholder="전화번호" value="${owner.contact}">
+      <input type="text" class="co-owner-share" placeholder="지분" value="${owner.share}">
+      <input type="text" class="co-owner-memo" placeholder="비고" value="${owner.memo}">
+      <button type="button" class="btn-remove-co-owner">삭제</button>
+    `;
+    list.appendChild(card);
+
+    card.querySelector('.co-owner-name').addEventListener('input', (e) => {
+      owner.name = e.target.value;
+      updateCoOwnerSummary();
+    });
+    card.querySelector('.co-owner-jumin').addEventListener('input', (e) => {
+      const val = formatJumin(e.target.value);
+      e.target.value = val;
+      owner.jumin = val;
+    });
+    card.querySelector('.co-owner-contact').addEventListener('input', (e) => {
+      const val = formatPhone(e.target.value);
+      e.target.value = val;
+      owner.contact = val;
+    });
+    card.querySelector('.co-owner-share').addEventListener('input', (e) => {
+      owner.share = e.target.value;
+    });
+    card.querySelector('.co-owner-memo').addEventListener('input', (e) => {
+      owner.memo = e.target.value;
+    });
+    card.querySelector('.btn-remove-co-owner').addEventListener('click', () => removeCoOwner(owner.id));
+  });
+
+  updateCoOwnerSummary();
+}
+
 // Initialize Application
 window.addEventListener('DOMContentLoaded', async () => {
   log('디지털 기본조사서 초기화 중...');
@@ -580,6 +666,24 @@ window.addEventListener('DOMContentLoaded', async () => {
     button.addEventListener('click', () => openAddressSearch(button.dataset.addressTarget));
   });
 
+  const ownershipModeEl = document.getElementById('ownership_mode');
+  if (ownershipModeEl) {
+    ownershipModeEl.addEventListener('change', (e) => {
+      db.survey.ownershipMode = e.target.value;
+      renderCoOwners();
+    });
+  }
+
+  const btnAddCoOwner = document.getElementById('btnAddCoOwner');
+  if (btnAddCoOwner) {
+    btnAddCoOwner.addEventListener('click', () => {
+      db.survey.ownershipMode = 'shared';
+      if (ownershipModeEl) ownershipModeEl.value = 'shared';
+      addCoOwner();
+    });
+  }
+  renderCoOwners();
+
   document.getElementById('btnCloseAddress').addEventListener('click', closeAddressSearch);
   document.getElementById('addressModal').addEventListener('click', (e) => {
     if (e.target.id === 'addressModal') closeAddressSearch();
@@ -592,7 +696,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  // Bind out_of_district checkbox
+  // Bind optional out-of-district checkbox if present
   const outOfDistrictEl = document.getElementById('out_of_district');
   if (outOfDistrictEl) {
     outOfDistrictEl.addEventListener('change', (e) => {
@@ -701,6 +805,15 @@ window.addEventListener('DOMContentLoaded', async () => {
     btnToggleSurveyPhotoCard.addEventListener('click', () => {
       surveyPhotoCard.classList.toggle('collapsed');
       btnToggleSurveyPhotoCard.innerText = surveyPhotoCard.classList.contains('collapsed') ? '펼치기' : '접기';
+    });
+  }
+
+  const businessInfoCard = document.getElementById('businessInfoCard');
+  const btnToggleBusinessInfo = document.getElementById('btnToggleBusinessInfo');
+  if (businessInfoCard && btnToggleBusinessInfo) {
+    btnToggleBusinessInfo.addEventListener('click', () => {
+      businessInfoCard.classList.toggle('collapsed');
+      btnToggleBusinessInfo.innerText = businessInfoCard.classList.contains('collapsed') ? '펼치기' : '접기';
     });
   }
   
@@ -1210,7 +1323,7 @@ function syncItemData(id) {
 
 // Update survey header titles at the top of Photo Log
 function syncSurveyHeadersToPhotos() {
-  const ownerLabel = db.survey.owner || 'OOO';
+  const ownerLabel = getOwnerDisplayName() || 'OOO';
   const locLabel = compactAddressFromDong(db.survey.location) || 'OO동 OOO-OOO';
   log(`소재지/소유자/지구명 동기화 수행: 소유자: ${ownerLabel}, 주소: ${locLabel}`);
   
@@ -1226,7 +1339,7 @@ function syncSurveyHeadersToPhotos() {
       
       const ownerInput = cardEl.querySelector('.card-owner');
       if (ownerInput && item.customOwner === undefined) {
-        ownerInput.value = db.survey.owner || '';
+        ownerInput.value = getOwnerDisplayName() || '';
       }
     }
     
@@ -1304,7 +1417,7 @@ function updatePhotoCards() {
             </div>
             <div class="form-group">
               <label>소유자 (기본조사서 연동)</label>
-              <input type="text" class="card-owner" data-item-id="${item.id}" value="${item.customOwner !== undefined ? item.customOwner : (db.survey.owner || '')}" placeholder="소유자 입력">
+              <input type="text" class="card-owner" data-item-id="${item.id}" value="${item.customOwner !== undefined ? item.customOwner : (getOwnerDisplayName() || '')}" placeholder="소유자 입력">
             </div>
           </div>
 
@@ -1478,7 +1591,7 @@ function drawCompositeImage(item) {
       const districtVal = db.survey.district || '';
       const locationVal = compactAddressFromDong(item.customLocation !== undefined ? item.customLocation : (item.location || db.survey.location || ''));
       const descVal = getCompositeItemDesc(item);
-      const ownerVal = item.customOwner !== undefined ? item.customOwner : (db.survey.owner || '');
+      const ownerVal = item.customOwner !== undefined ? item.customOwner : (getOwnerDisplayName() || '');
       const dateVal = db.survey.date || new Date().toISOString().split('T')[0];
       
       const values = [districtVal, locationVal, descVal, ownerVal, dateVal];
@@ -1606,7 +1719,7 @@ function rebuildSurveyWorksheet(workbook, wsSurvey) {
   label('A4:D4', '사업지구명');
   value('E4:P4', db.survey.district || '');
   label('Q4:T4', '소유자 성명');
-  value('U4:AF4', db.survey.owner || '');
+  value('U4:AF4', getOwnerDisplayName() || '');
   label('A5:D5', '주민등록번호');
   value('E5:P5', db.survey.repJumin || '');
   label('Q5:T5', '전화번호');
@@ -1714,7 +1827,7 @@ function rebuildSurveyWorksheet(workbook, wsSurvey) {
   label('Y51:AB51', '입회자 성명');
   value('AC51:AF51', db.survey.witness || '', 'center');
   label('A52:D52', '확인자 성명');
-  value('E52:L52', db.survey.owner || '', 'center');
+  value('E52:L52', getOwnerDisplayName() || '', 'center');
   value('M52:AF52', '(인)', 'right');
 
   wsSurvey.views = [{ showGridLines: false }];
@@ -1770,7 +1883,7 @@ function rebuildDocumentsWorksheet(workbook) {
   wsDocs.getRow(1).height = 30;
 
   [
-    ['소유자', db.survey.owner || '', '물건 소재지', compactAddressFromDong(db.survey.location) || ''],
+    ['소유자', getOwnerDisplayName() || '', '물건 소재지', compactAddressFromDong(db.survey.location) || ''],
     ['조사일자', db.survey.date || '', '조사자', db.survey.surveyor || '']
   ].forEach((rowValues, index) => {
     const row = wsDocs.getRow(index + 2);
@@ -1906,7 +2019,7 @@ function rebuildItemsWorksheet(workbook) {
   wsItems.mergeCells('A2:B2');
   wsItems.getCell('A2').value = '소유자';
   wsItems.mergeCells('C2:E2');
-  wsItems.getCell('C2').value = db.survey.owner || '';
+  wsItems.getCell('C2').value = getOwnerDisplayName() || '';
   wsItems.mergeCells('F2:G2');
   wsItems.getCell('F2').value = '물건 소재지';
   wsItems.mergeCells('H2:K2');
@@ -1999,7 +2112,7 @@ function rebuildPhotoWorksheet(workbook) {
   wsPhotos.mergeCells('A2:B2');
   wsPhotos.getCell('A2').value = '소유자';
   wsPhotos.mergeCells('C2:F2');
-  wsPhotos.getCell('C2').value = db.survey.owner || '';
+  wsPhotos.getCell('C2').value = getOwnerDisplayName() || '';
   wsPhotos.mergeCells('G2:H2');
   wsPhotos.getCell('G2').value = '소재지';
   wsPhotos.mergeCells('I2:L2');
@@ -2103,7 +2216,7 @@ async function createZipPackage(type = "blob") {
   const excelBuffer = await generateExcelBuffer();
   const zip = new JSZip();
 
-  const ownerName = db.survey.owner || '공통';
+  const ownerName = getOwnerDisplayName() || db.survey.owner || '공통';
   const dateStr = db.survey.date ? db.survey.date.replace(/-/g, '') : new Date().toISOString().split('T')[0].replace(/-/g, '');
   const filenameBase = `조사보고서_${ownerName}_${dateStr}`;
 

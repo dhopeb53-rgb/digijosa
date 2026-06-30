@@ -291,6 +291,14 @@ body {
   gap: 12px;
 }
 
+.card-header-inline-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .btn-toggle-card {
   height: 24px;
   padding: 0 10px;
@@ -427,9 +435,115 @@ body {
   gap: 8px;
 }
 
-.owner-summary-row input {
+.owner-summary-row input,
+.owner-detail-row input,
+.owner-delivery-row input,
+.owner-detail-row select,
+.owner-delivery-row select {
   width: 100%;
   min-width: 0;
+}
+
+.owner-detail-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(130px, 1.1fr) minmax(110px, 0.95fr) minmax(76px, 0.55fr) minmax(76px, 0.55fr);
+  gap: 8px;
+}
+
+.owner-delivery-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(130px, 1.1fr) minmax(110px, 0.95fr);
+  gap: 8px;
+}
+
+.ownership-mode-select {
+  height: 30px;
+  font-weight: 700;
+}
+
+.co-owner-section {
+  border: 1px solid rgba(2, 132, 199, 0.16);
+  border-radius: var(--radius-md);
+  background: rgba(2, 132, 199, 0.035);
+  padding: 10px;
+}
+
+.co-owner-section.hidden {
+  display: none;
+}
+
+.co-owner-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.co-owner-header strong {
+  display: block;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.co-owner-header span {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.btn-add-co-owner {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(2, 132, 199, 0.25);
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+  color: var(--accent-primary);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.co-owner-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.co-owner-empty {
+  padding: 8px 10px;
+  border: 1px dashed rgba(148, 163, 184, 0.75);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.75);
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-align: center;
+}
+
+.co-owner-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 1fr) minmax(110px, 0.9fr) minmax(80px, 0.65fr) minmax(110px, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.co-owner-card input {
+  width: 100%;
+  min-width: 0;
+}
+
+.btn-remove-co-owner {
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+  color: var(--danger);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .signature-row {
@@ -516,6 +630,9 @@ body {
   .business-primary-row,
   .basic-summary-row,
   .owner-summary-row,
+  .owner-detail-row,
+  .owner-delivery-row,
+  .co-owner-card,
   .signature-row,
   .business-id-row {
     grid-template-columns: 1fr;
@@ -1256,6 +1373,38 @@ input:checked + .slider:before {
   font-weight: 700;
   font-size: 14px;
   color: var(--accent-primary);
+  flex-wrap: wrap;
+}
+
+.special-status-row {
+  grid-template-columns: repeat(6, auto);
+  justify-content: start;
+  gap: 8px;
+  margin: 0;
+}
+
+.card-header-inline-status .special-status-row {
+  justify-content: end;
+  align-items: center;
+}
+
+.card-header-inline-status .checkbox-label-container {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+
+.panel-title-warning {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.12);
+  color: #b45309;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.2;
 }
 
 .toggle-icon {
@@ -1743,6 +1892,10 @@ input:checked + .slider:before {
 @media (max-width: 760px) {
   .property-status-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .special-status-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 

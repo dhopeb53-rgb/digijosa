@@ -13,7 +13,7 @@
   <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
 
   <!-- Vanilla CSS Reference -->
-  <link rel="stylesheet" href="style.css?v=20260630_02">
+  <link rel="stylesheet" href="style.css?v=20260630_09">
 </head>
 <body>
   <div class="app-container">
@@ -59,62 +59,11 @@
       <section id="tab-survey" class="tab-pane active">
         <div class="card glass-card">
           <div class="card-header compact-title-header">
-            <h2><i data-lucide="info"></i> 기본정보 및 사업자 정보</h2>
+            <h2><i data-lucide="info"></i> 기본정보</h2>
             <input type="text" class="header-district-input" id="district_name" placeholder="사업지구명">
           </div>
           <div class="card-body">
             <div class="form-grid">
-              <div class="owner-summary-row col-span-2">
-                <input type="text" id="owner_name" placeholder="소유자 성명">
-                <input type="text" id="rep_jumin" placeholder="주민등록번호">
-                <input type="text" id="rep_contact" placeholder="전화번호">
-              </div>
-              <!-- 일반사항 및 사업자 정보 -->
-              <div class="business-primary-row col-span-2">
-                <input type="text" id="company_name" placeholder="상호">
-                <input type="text" id="rep_name" placeholder="대표자 성명">
-                <input type="text" id="biz_reg_no" placeholder="사업자등록번호">
-                <input type="text" id="corp_reg_no" placeholder="법인등록번호">
-              </div>
-              <div class="business-id-row col-span-2">
-                <input type="text" id="biz_type" placeholder="업종">
-                <input type="text" id="biz_status" placeholder="업태">
-                <input type="text" id="permit_notes" placeholder="기타 허가사항">
-              </div>
-              <!-- 물건 현황 정보 -->
-              <div class="form-group col-span-2">
-                <div class="property-status-row">
-                  <select id="rent_type" class="status-rent-select" aria-label="자가 또는 임차 구분">
-                    <option value="자가">자가</option>
-                    <option value="임차">임차</option>
-                    <option value="기타">기타</option>
-                  </select>
-                  <label class="checkbox-label-container">
-                    <input type="checkbox" id="has_ledger">
-                    <span class="checkbox-text">건축물대장</span>
-                  </label>
-                  <label class="checkbox-label-container">
-                    <input type="checkbox" id="is_business">
-                    <span class="checkbox-text">영업장</span>
-                  </label>
-                  <label class="checkbox-label-container">
-                    <input type="checkbox" id="is_residence">
-                    <span class="checkbox-text">거주</span>
-                  </label>
-                  <label class="checkbox-label-container">
-                    <input type="checkbox" id="has_electricity">
-                    <span class="checkbox-text">전기</span>
-                  </label>
-                  <label class="checkbox-label-container">
-                    <input type="checkbox" id="has_water">
-                    <span class="checkbox-text">수도</span>
-                  </label>
-                  <label class="checkbox-label-container">
-                    <input type="checkbox" id="has_septic">
-                    <span class="checkbox-text">정화조</span>
-                  </label>
-                </div>
-              </div>
               <!-- 물건 소재지 (공통 주소) -->
               <div class="form-group col-span-2">
                 <label for="location_name">물건 소재지</label>
@@ -125,11 +74,33 @@
                   <input type="text" class="address-postcode" id="location_postcode" placeholder="우편번호">
                   <input type="text" class="address-main" id="location_name" placeholder="지번주소">
                   <input type="text" id="location_detail" placeholder="동·층·호 등 상세주소 입력">
-                  <label class="mini-checkbox-label">
-                    <input type="checkbox" id="out_of_district">
-                    <span>지구외</span>
-                  </label>
                 </div>
+              </div>
+
+              <div class="owner-detail-row col-span-2">
+                <input type="text" id="owner_name" placeholder="성명">
+                <input type="text" id="rep_jumin" placeholder="주민등록번호">
+                <input type="text" id="rep_contact" placeholder="전화번호">
+                <select id="rent_type" class="status-rent-select" aria-label="자가 또는 임차 구분">
+                  <option value="자가">자가</option>
+                  <option value="임차">임차</option>
+                  <option value="기타">기타</option>
+                </select>
+                <select id="ownership_mode" class="ownership-mode-select" aria-label="단독 또는 공유 구분">
+                  <option value="single">단독</option>
+                  <option value="shared">공유</option>
+                </select>
+              </div>
+
+              <div class="co-owner-section col-span-2 hidden" id="coOwnerSection">
+                <div class="co-owner-header">
+                  <div>
+                    <strong>공유자 및 지분</strong>
+                    <span id="coOwnerSummary">공유자 0명</span>
+                  </div>
+                  <button type="button" class="btn-add-co-owner" id="btnAddCoOwner">+ 공유자 추가</button>
+                </div>
+                <div class="co-owner-list" id="coOwnerList"></div>
               </div>
 
               <!-- 송달주소 -->
@@ -142,14 +113,26 @@
                   <input type="text" class="address-postcode" id="rep_postcode" placeholder="우편번호">
                   <input type="text" class="address-main" id="rep_addr" placeholder="지번주소">
                   <input type="text" id="rep_detail" placeholder="동·층·호 등 상세주소 입력">
-                  <label class="mini-checkbox-label">
-                    <input type="checkbox" class="address-district-check" data-address-check="rep">
-                    <span>지구외</span>
-                  </label>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
 
-              <!-- 사업자등록증상 소재지 -->
+        <div class="card glass-card collapsible-card" id="businessInfoCard">
+          <div class="card-header card-header-action">
+            <h2><i data-lucide="building-2"></i> 사업자정보</h2>
+            <button type="button" class="btn-toggle-card" id="btnToggleBusinessInfo">접기</button>
+          </div>
+          <div class="card-body">
+            <div class="form-grid">
+              <div class="business-primary-row col-span-2">
+                <input type="text" id="company_name" placeholder="상호">
+                <input type="text" id="rep_name" placeholder="대표자 성명">
+                <input type="text" id="biz_reg_no" placeholder="사업자등록번호">
+                <input type="text" id="corp_reg_no" placeholder="법인등록번호">
+              </div>
+
               <div class="form-group col-span-2">
                 <label for="biz_location">사업자등록증상 소재지</label>
                 <div class="address-search-row">
@@ -165,13 +148,45 @@
                   </label>
                 </div>
               </div>
+
+              <div class="business-id-row col-span-2">
+                <input type="text" id="biz_type" placeholder="업종">
+                <input type="text" id="biz_status" placeholder="업태">
+                <input type="text" id="permit_notes" placeholder="기타 허가사항">
+              </div>
             </div>
           </div>
         </div>
 
         <div class="card glass-card">
-          <div class="card-header">
+          <div class="card-header card-header-inline-status">
             <h2><i data-lucide="clipboard-list"></i> 특기사항</h2>
+            <div class="property-status-row special-status-row">
+              <label class="checkbox-label-container">
+                <input type="checkbox" id="has_ledger">
+                <span class="checkbox-text">건축물대장</span>
+              </label>
+              <label class="checkbox-label-container">
+                <input type="checkbox" id="is_business">
+                <span class="checkbox-text">영업장</span>
+              </label>
+              <label class="checkbox-label-container">
+                <input type="checkbox" id="is_residence">
+                <span class="checkbox-text">거주</span>
+              </label>
+              <label class="checkbox-label-container">
+                <input type="checkbox" id="has_electricity">
+                <span class="checkbox-text">전기</span>
+              </label>
+              <label class="checkbox-label-container">
+                <input type="checkbox" id="has_water">
+                <span class="checkbox-text">수도</span>
+              </label>
+              <label class="checkbox-label-container">
+                <input type="checkbox" id="has_septic">
+                <span class="checkbox-text">정화조</span>
+              </label>
+            </div>
           </div>
           <div class="card-body">
             <div class="form-group">
@@ -271,6 +286,7 @@
         <div class="panel-title">
           <i data-lucide="download-cloud"></i>
           <span>내보내기 및 파일 다운로드</span>
+          <small class="panel-title-warning">사진파일 25MB 초과 시 이메일 발송 불가</small>
         </div>
         <i data-lucide="chevron-up" class="toggle-icon" id="toggleIcon"></i>
       </div>
@@ -443,6 +459,6 @@
   <script src="template_data.js"></script>
   
   <!-- Core Logic script -->
-  <script src="app.js?v=20260630_02"></script>
+  <script src="app.js?v=20260630_09"></script>
 </body>
 </html>
