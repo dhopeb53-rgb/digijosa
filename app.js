@@ -257,12 +257,65 @@ function closeAddressSearch() {
   container.innerHTML = '';
 }
 
-function openAddressSearch(target) {
+const POSTCODE_SCRIPT_URL = 'https://t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js';
+let postcodeScriptPromise = null;
+
+function getPostcodeConstructor() {
+  return (window.daum && window.daum.Postcode)
+    || (window.kakao && window.kakao.Postcode)
+    || null;
+}
+
+function loadPostcodeScript() {
+  const existingPostcode = getPostcodeConstructor();
+  if (existingPostcode) return Promise.resolve(existingPostcode);
+  if (postcodeScriptPromise) return postcodeScriptPromise;
+
+  postcodeScriptPromise = new Promise((resolve, reject) => {
+    const existingScripts = Array.from(document.scripts).filter(script =>
+      script.src && script.src.includes('/postcode/prod/postcode.v2.js')
+    );
+    existingScripts.forEach(script => script.remove());
+
+    const finish = () => {
+      const Postcode = getPostcodeConstructor();
+      if (Postcode) {
+        resolve(Postcode);
+      } else {
+        postcodeScriptPromise = null;
+        reject(new Error('Daum Postcode API was not registered.'));
+      }
+    };
+
+    const script = document.createElement('script');
+    script.src = `${POSTCODE_SCRIPT_URL}?v=${Date.now()}`;
+    script.async = true;
+    script.onload = finish;
+    script.onerror = () => {
+      postcodeScriptPromise = null;
+      reject(new Error('Daum Postcode script failed to load.'));
+    };
+    document.head.appendChild(script);
+  });
+
+  return postcodeScriptPromise;
+}
+
+async function openAddressSearch(target) {
   const config = ADDRESS_CONFIG[target];
   if (!config) return;
 
-  const Postcode = (window.kakao && window.kakao.Postcode)
-    || (window.daum && window.daum.Postcode);
+  let Postcode = getPostcodeConstructor();
+
+  if (!Postcode) {
+    try {
+      Postcode = await loadPostcodeScript();
+    } catch (err) {
+      console.error('주소 검색 서비스 로딩 실패:', err);
+      alert('주소 검색 서비스를 불러오지 못했습니다. 인터넷 연결을 확인한 뒤 다시 시도해 주세요.');
+      return;
+    }
+  }
 
   if (!Postcode) {
     alert('주소 검색 서비스를 불러오지 못했습니다. 인터넷 연결을 확인해 주세요.');
@@ -277,9 +330,9 @@ function openAddressSearch(target) {
   new Postcode({
     oncomplete(data) {
       try {
-        const primary = data.address
-          || data.jibunAddress
+        const primary = data.jibunAddress
           || data.autoJibunAddress
+          || data.address
           || data.roadAddress
           || data.autoRoadAddress
           || '';
@@ -691,9 +744,11 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   Object.values(ADDRESS_CONFIG).forEach(config => {
     const detailInput = document.getElementById(config.detailId);
-    detailInput.addEventListener('input', (e) => {
-      db.survey[config.detailKey] = e.target.value;
-    });
+    if (detailInput) {
+      detailInput.addEventListener('input', (e) => {
+        db.survey[config.detailKey] = e.target.value;
+      });
+    }
   });
 
   // Bind optional out-of-district checkbox if present
@@ -792,7 +847,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   
   // Bind Action Buttons
   document.getElementById('tableAddTrigger').addEventListener('click', () => {
-    addTableDataRow();
+    addTableDataRow(null, null, { focusName: true });
   });
   document.getElementById('documentAddTrigger').addEventListener('click', addDocumentCard);
   document.getElementById('btnDownloadZip').addEventListener('click', downloadZipArchive);
@@ -999,7 +1054,7 @@ function renderDocumentCards() {
 
 // Dynamic Row addition (Item Form Card) (Tab 2)
 let rowIdCounter = 0;
-function addTableDataRow(sourceItem = null, insertAfterId = null) {
+function addTableDataRow(sourceItem = null, insertAfterId = null, options = {}) {
   rowIdCounter++;
   const container = document.getElementById('itemCardsList');
   const card = document.createElement('div');
@@ -1035,12 +1090,15 @@ function addTableDataRow(sourceItem = null, insertAfterId = null) {
   db.items.splice(insertIndex, 0, rowObj);
   const itemIndex = insertIndex + 1;
 
-  const isCustomType = !SURVEY_ITEM_TYPES.includes(rowObj.type);
+  if (!SURVEY_ITEM_TYPES.includes(rowObj.type)) {
+    rowObj.type = '기타지장물';
+  }
+  const isCustomType = false;
   const isCustomUnit = !SURVEY_ITEM_UNITS.includes(rowObj.unit);
   
   const typeOptionsHtml = SURVEY_ITEM_TYPES.map(t => 
     `<option value="${t}" ${!isCustomType && t === rowObj.type ? 'selected' : ''}>${t}</option>`
-  ).join('') + `<option value="custom" ${isCustomType ? 'selected' : ''}>직접 입력...</option>`;
+  ).join('');
   
   const unitOptionsHtml = SURVEY_ITEM_UNITS.map(u => 
     `<option value="${u}" ${!isCustomUnit && u === rowObj.unit ? 'selected' : ''}>${u}</option>`
@@ -1048,55 +1106,16 @@ function addTableDataRow(sourceItem = null, insertAfterId = null) {
   
   card.innerHTML = `
     <div class="item-card-header">
-      <span class="item-num">물건 #${itemIndex}</span>
-      <div class="item-card-actions">
-        <button type="button" class="btn-item-action btn-calc-qty" title="규격에서 수량 계산">계산</button>
-        <button type="button" class="btn-item-action btn-duplicate-item" title="이 물건 복제">복제</button>
-        <button type="button" class="btn-item-action btn-move-up" title="위로 이동" aria-label="물건 위로 이동">↑</button>
-        <button type="button" class="btn-item-action btn-move-down" title="아래로 이동" aria-label="물건 아래로 이동">↓</button>
-        <button type="button" class="btn-text-danger btn-delete-item">삭제</button>
-      </div>
-    </div>
-    <div class="item-card-body">
-      <!-- Line 1: 유형 | 명 | 수량 | 단위 -->
-      <div class="item-card-row-1">
-        <div class="form-group">
-          <select class="cell-type">
-            ${typeOptionsHtml}
-          </select>
-          <input type="text" class="cell-type-custom ${isCustomType ? '' : 'hidden'}" placeholder="유형 직접 입력">
-        </div>
-        <div class="form-group">
-          <input type="text" class="cell-name" placeholder="물건명 : 컨테이너 창고">
-        </div>
-        <div class="form-group">
-          <input type="text" class="cell-qty" inputmode="decimal" placeholder="수량" style="text-align: right;">
-        </div>
-        <div class="form-group">
-          <select class="cell-unit">
-            ${unitOptionsHtml}
-          </select>
-          <input type="text" class="cell-unit-custom ${isCustomUnit ? '' : 'hidden'}" placeholder="단위 직접 입력" style="width: 70px;">
-        </div>
-      </div>
-      
-      <!-- Line 2: 구조 및 규격 & 비고 (Parallel) -->
-      <div class="item-card-row-2">
-        <div class="form-group">
-          <textarea class="cell-specs" rows="1" placeholder="구조 및 규격 : 조립식 판넬조 2.5*3m"></textarea>
-        </div>
-        <div class="form-group">
-          <input type="text" class="cell-remarks" placeholder="비고">
-        </div>
-      </div>
-      
-      <!-- Line 3: 물건 소재지 & 현황 정보 -->
-      <div class="item-card-row-3">
-        <div class="inline-location-field">
-          <span>물건소재지 :</span>
+      <div class="item-card-title-line">
+        <span class="item-num">물건 #${itemIndex}</span>
+        <select class="cell-type item-header-type">
+          ${typeOptionsHtml}
+        </select>
+        <div class="inline-location-field item-header-location">
+          <span>물건소재지</span>
           <input type="text" class="cell-location" placeholder="예: OO동 OOO-OOO">
         </div>
-        <div class="item-status-row">
+        <div class="item-status-row item-header-status">
           <label class="checkbox-label-container">
             <input type="checkbox" class="cell-ledger">
             <span class="checkbox-text">건축물대장</span>
@@ -1111,6 +1130,41 @@ function addTableDataRow(sourceItem = null, insertAfterId = null) {
           </label>
         </div>
       </div>
+      <div class="item-card-actions">
+        <button type="button" class="btn-item-action btn-toggle-remarks" title="비고 입력 열기">+ 비고</button>
+        <button type="button" class="btn-item-action btn-calc-qty" title="규격에서 수량 계산">계산</button>
+        <button type="button" class="btn-item-action btn-duplicate-item" title="이 물건 복제">복제</button>
+        <button type="button" class="btn-item-action btn-move-up" title="위로 이동" aria-label="물건 위로 이동">↑</button>
+        <button type="button" class="btn-item-action btn-move-down" title="아래로 이동" aria-label="물건 아래로 이동">↓</button>
+        <button type="button" class="btn-text-danger btn-delete-item">삭제</button>
+      </div>
+    </div>
+    <div class="item-card-body">
+      <!-- Line 1: 물건명 | 구조 및 규격 | 수량 | 단위 -->
+      <div class="item-card-row-1">
+        <div class="form-group">
+          <input type="text" class="cell-name" placeholder="물건명 : 컨테이너 창고">
+        </div>
+        <div class="form-group">
+          <textarea class="cell-specs" rows="1" placeholder="구조 및 규격 : 조립식 판넬조 2.5*3m"></textarea>
+        </div>
+        <div class="form-group">
+          <input type="text" class="cell-qty" inputmode="decimal" placeholder="수량" style="text-align: right;">
+        </div>
+        <div class="form-group">
+          <select class="cell-unit">
+            ${unitOptionsHtml}
+          </select>
+          <input type="text" class="cell-unit-custom ${isCustomUnit ? '' : 'hidden'}" placeholder="단위 직접 입력" style="width: 70px;">
+        </div>
+      </div>
+      
+      <!-- Line 2: 비고 -->
+      <div class="item-card-row-2 remarks-row hidden">
+        <div class="form-group">
+          <input type="text" class="cell-remarks" placeholder="비고">
+        </div>
+      </div>
     </div>
   `;
   
@@ -1122,7 +1176,6 @@ function addTableDataRow(sourceItem = null, insertAfterId = null) {
   }
   lucide.createIcons({ attrs: { class: 'lucide-icon-sm' } });
   
-  card.querySelector('.cell-type-custom').value = isCustomType ? rowObj.type : '';
   card.querySelector('.cell-name').value = rowObj.name || '';
   card.querySelector('.cell-specs').value = rowObj.specs || '';
   card.querySelector('.cell-qty').value = rowObj.qty ?? '';
@@ -1134,23 +1187,23 @@ function addTableDataRow(sourceItem = null, insertAfterId = null) {
   card.querySelector('.cell-residence').checked = !!rowObj.isResidence;
   
   const selectType = card.querySelector('.cell-type');
-  const inputTypeCustom = card.querySelector('.cell-type-custom');
   const selectUnit = card.querySelector('.cell-unit');
   const inputUnitCustom = card.querySelector('.cell-unit-custom');
+  const remarksRow = card.querySelector('.remarks-row');
+  const remarksInput = card.querySelector('.cell-remarks');
+  const toggleRemarksButton = card.querySelector('.btn-toggle-remarks');
+
+  function setRemarksVisible(visible) {
+    remarksRow.classList.toggle('hidden', !visible);
+    toggleRemarksButton.innerText = visible ? '비고 닫기' : '+ 비고';
+    toggleRemarksButton.title = visible ? '비고 입력 닫기' : '비고 입력 열기';
+    toggleRemarksButton.classList.toggle('has-value', !!remarksInput.value.trim());
+  }
+
+  setRemarksVisible(!!(rowObj.remarks || '').trim());
   
-  // Handle "Direct input" dropdown triggers
+  // Handle dropdown triggers
   selectType.addEventListener('change', (e) => {
-    if (e.target.value === 'custom') {
-      inputTypeCustom.classList.remove('hidden');
-      rowObj.type = '';
-    } else {
-      inputTypeCustom.classList.add('hidden');
-      rowObj.type = e.target.value;
-    }
-    syncItemData(currentId);
-  });
-  
-  inputTypeCustom.addEventListener('input', (e) => {
     rowObj.type = e.target.value;
     syncItemData(currentId);
   });
@@ -1192,9 +1245,16 @@ function addTableDataRow(sourceItem = null, insertAfterId = null) {
     syncItemData(currentId);
   });
   
-  card.querySelector('.cell-remarks').addEventListener('input', (e) => {
+  remarksInput.addEventListener('input', (e) => {
     rowObj.remarks = e.target.value;
+    toggleRemarksButton.classList.toggle('has-value', !!e.target.value.trim());
     syncItemData(currentId);
+  });
+
+  toggleRemarksButton.addEventListener('click', () => {
+    const nextVisible = remarksRow.classList.contains('hidden');
+    setRemarksVisible(nextVisible);
+    if (nextVisible) remarksInput.focus();
   });
   
   card.querySelector('.cell-location').addEventListener('input', (e) => {
@@ -1226,7 +1286,7 @@ function addTableDataRow(sourceItem = null, insertAfterId = null) {
     deleteTableRow(currentId, card);
   });
   card.querySelector('.btn-duplicate-item').addEventListener('click', () => {
-    addTableDataRow(rowObj, currentId);
+    addTableDataRow(rowObj, currentId, { focusName: true });
     log(`물건 #${db.items.findIndex(item => item.id === currentId) + 1} 복제 완료`);
   });
   card.querySelector('.btn-move-up').addEventListener('click', () => moveTableRow(currentId, -1));
@@ -1234,6 +1294,15 @@ function addTableDataRow(sourceItem = null, insertAfterId = null) {
   
   updateRowNumbers();
   updatePhotoCards();
+  if (options.focusName) {
+    setTimeout(() => {
+      const nameInput = card.querySelector('.cell-name');
+      if (!nameInput) return;
+      card.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      nameInput.focus();
+      nameInput.select();
+    }, 0);
+  }
   log(`${sourceItem ? '지장물 항목 복제' : '지장물 항목 추가'} (ID: ${currentId})`);
 }
 
