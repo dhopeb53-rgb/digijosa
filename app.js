@@ -46,7 +46,9 @@ let db = {
     hasWater: false,
     hasSeptic: false,
     rentType: '자가',
-    permitNotes: ''
+    permitNotes: '',
+    surveyorSignature: '',
+    witnessSignature: ''
   },
   items: [], // List of items/objects (Tab 2)
   documents: [] // Additional submitted photos
@@ -338,6 +340,141 @@ function getCompositeItemDesc(item) {
   return desc.trim();
 }
 
+let signatureState = {
+  target: null,
+  isDrawing: false,
+  hasStroke: false
+};
+
+function initSignaturePad() {
+  const modal = document.getElementById('signatureModal');
+  const canvas = document.getElementById('signatureCanvas');
+  const title = document.getElementById('signatureModalTitle');
+  const btnClose = document.getElementById('btnCloseSignature');
+  const btnClear = document.getElementById('btnSignatureClear');
+  const btnSave = document.getElementById('btnSignatureSave');
+  if (!modal || !canvas || !title || !btnClose || !btnClear || !btnSave) return;
+
+  const ctx = canvas.getContext('2d');
+
+  const clearCanvas = () => {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    signatureState.hasStroke = false;
+  };
+
+  const getCoords = (event) => {
+    const rect = canvas.getBoundingClientRect();
+    const point = event.touches ? event.touches[0] : event;
+    return {
+      x: (point.clientX - rect.left) * (canvas.width / rect.width),
+      y: (point.clientY - rect.top) * (canvas.height / rect.height)
+    };
+  };
+
+  const drawStart = (event) => {
+    event.preventDefault();
+    signatureState.isDrawing = true;
+    signatureState.hasStroke = true;
+    const { x, y } = getCoords(event);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+  };
+
+  const drawMove = (event) => {
+    if (!signatureState.isDrawing) return;
+    event.preventDefault();
+    const { x, y } = getCoords(event);
+    ctx.lineTo(x, y);
+    ctx.strokeStyle = '#111827';
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+  };
+
+  const drawEnd = (event) => {
+    if (event) event.preventDefault();
+    signatureState.isDrawing = false;
+  };
+
+  const openSignatureModal = (target) => {
+    signatureState.target = target;
+    clearCanvas();
+    title.textContent = target === 'surveyor' ? '조사자 서명' : '입회자 서명';
+
+    const saved = target === 'surveyor'
+      ? db.survey.surveyorSignature
+      : db.survey.witnessSignature;
+
+    if (saved) {
+      const img = new Image();
+      img.onload = () => {
+        clearCanvas();
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        signatureState.hasStroke = true;
+      };
+      img.src = `data:image/jpeg;base64,${saved}`;
+    }
+
+    modal.classList.remove('hidden');
+  };
+
+  const closeSignatureModal = () => {
+    signatureState.target = null;
+    signatureState.isDrawing = false;
+    modal.classList.add('hidden');
+  };
+
+  const updateSignatureButton = (target) => {
+    const button = document.querySelector(`.btn-signature-open[data-signature-target="${target}"]`);
+    if (!button) return;
+    const signed = target === 'surveyor'
+      ? !!db.survey.surveyorSignature
+      : !!db.survey.witnessSignature;
+    button.classList.toggle('is-signed', signed);
+    button.textContent = signed ? '서명완료' : '서명';
+  };
+
+  document.querySelectorAll('.btn-signature-open').forEach(button => {
+    button.addEventListener('click', () => openSignatureModal(button.dataset.signatureTarget));
+  });
+
+  btnClose.addEventListener('click', closeSignatureModal);
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) closeSignatureModal();
+  });
+
+  btnClear.addEventListener('click', clearCanvas);
+
+  btnSave.addEventListener('click', () => {
+    if (!signatureState.target) return;
+    const signatureBase64 = signatureState.hasStroke
+      ? canvas.toDataURL('image/jpeg', 0.9).split(',')[1]
+      : '';
+
+    if (signatureState.target === 'surveyor') {
+      db.survey.surveyorSignature = signatureBase64;
+    } else {
+      db.survey.witnessSignature = signatureBase64;
+    }
+
+    updateSignatureButton(signatureState.target);
+    log(`${signatureState.target === 'surveyor' ? '조사자' : '입회자'} 서명 저장 완료.`);
+    closeSignatureModal();
+  });
+
+  canvas.addEventListener('mousedown', drawStart);
+  canvas.addEventListener('mousemove', drawMove);
+  canvas.addEventListener('mouseup', drawEnd);
+  canvas.addEventListener('mouseleave', drawEnd);
+  canvas.addEventListener('touchstart', drawStart, { passive: false });
+  canvas.addEventListener('touchmove', drawMove, { passive: false });
+  canvas.addEventListener('touchend', drawEnd, { passive: false });
+
+  clearCanvas();
+}
+
 // Initialize Application
 window.addEventListener('DOMContentLoaded', async () => {
   log('디지털 기본조사서 초기화 중...');
@@ -556,6 +693,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('documentAddTrigger').addEventListener('click', addDocumentCard);
   document.getElementById('btnDownloadZip').addEventListener('click', downloadZipArchive);
   document.getElementById('btnSendEmail').addEventListener('click', sendEmailWithZip);
+  initSignaturePad();
 
   const surveyPhotoCard = document.getElementById('surveyPhotoCard');
   const btnToggleSurveyPhotoCard = document.getElementById('btnToggleSurveyPhotoCard');
@@ -1996,6 +2134,16 @@ async function createZipPackage(type = "blob") {
       base64ToArrayBuffer(documentItem.image)
     );
   });
+
+  if (db.survey.surveyorSignature || db.survey.witnessSignature) {
+    const signatureFolder = zip.folder("04_서명");
+    if (db.survey.surveyorSignature) {
+      signatureFolder.file("조사자_서명.jpg", base64ToArrayBuffer(db.survey.surveyorSignature));
+    }
+    if (db.survey.witnessSignature) {
+      signatureFolder.file("입회자_서명.jpg", base64ToArrayBuffer(db.survey.witnessSignature));
+    }
+  }
 
   const content = await zip.generateAsync({ type });
   return { content, filenameBase, ownerName, dateStr };
