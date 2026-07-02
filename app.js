@@ -764,8 +764,7 @@ function addTableDataRow(sourceItem = null, insertAfterId = null, options = {}) 
           ${typeOptionsHtml}
         </select>
         <div class="inline-location-field item-header-location">
-          <span>물건소재지</span>
-          <input type="text" class="cell-location" placeholder="예: OO동 OOO-OOO">
+          <input type="text" class="cell-location" placeholder="물건소재지">
         </div>
         <div class="item-status-row item-header-status">
           <label class="checkbox-label-container">
