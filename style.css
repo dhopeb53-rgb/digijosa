@@ -1703,6 +1703,39 @@ input:checked + .slider:before {
   flex-shrink: 0;
 }
 
+.item-card-actions .item-status-action {
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.item-card-actions .item-status-action input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.item-card-actions .item-status-action:hover {
+  border-color: transparent;
+  background: transparent;
+  color: var(--accent-primary);
+  text-decoration: underline;
+}
+
+.item-card-actions .item-status-action:has(input[type="checkbox"]:checked) {
+  border-color: transparent;
+  background: transparent;
+  color: var(--accent-primary);
+  text-decoration: none;
+}
+
 .btn-item-action {
   padding: 0;
   border: 0;
@@ -2539,8 +2572,8 @@ input:checked + .slider:before {
   }
 
   .item-form-card .item-card-actions {
-    grid-column: 2;
-    width: auto;
+    grid-column: 1 / -1;
+    width: 100%;
     display: flex;
     flex-wrap: nowrap;
     justify-content: flex-start;
@@ -2549,6 +2582,11 @@ input:checked + .slider:before {
     min-width: 0;
     overflow: visible;
     white-space: nowrap;
+  }
+
+  .item-form-card .item-card-actions .item-status-action {
+    min-height: 24px;
+    font-size: 9.5px;
   }
 
   .item-form-card .btn-item-action,

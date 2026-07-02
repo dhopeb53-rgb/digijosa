@@ -766,22 +766,20 @@ function addTableDataRow(sourceItem = null, insertAfterId = null, options = {}) 
         <div class="inline-location-field item-header-location">
           <input type="text" class="cell-location" placeholder="물건소재지">
         </div>
-        <div class="item-status-row item-header-status">
-          <label class="checkbox-label-container">
-            <input type="checkbox" class="cell-ledger">
-            <span class="checkbox-text">건축물</span>
-          </label>
-          <label class="checkbox-label-container">
-            <input type="checkbox" class="cell-business">
-            <span class="checkbox-text">영업장</span>
-          </label>
-          <label class="checkbox-label-container">
-            <input type="checkbox" class="cell-residence">
-            <span class="checkbox-text">거주</span>
-          </label>
-        </div>
       </div>
       <div class="item-card-actions">
+        <label class="checkbox-label-container item-status-action">
+          <input type="checkbox" class="cell-ledger">
+          <span class="checkbox-text">건축물</span>
+        </label>
+        <label class="checkbox-label-container item-status-action">
+          <input type="checkbox" class="cell-business">
+          <span class="checkbox-text">영업장</span>
+        </label>
+        <label class="checkbox-label-container item-status-action">
+          <input type="checkbox" class="cell-residence">
+          <span class="checkbox-text">거주</span>
+        </label>
         <button type="button" class="btn-item-action btn-toggle-remarks" title="비고 입력 열기">+ 비고</button>
         <button type="button" class="btn-item-action btn-calc-qty" title="규격에서 수량 계산">계산</button>
         <button type="button" class="btn-item-action btn-duplicate-item" title="이 물건 복제">복제</button>
