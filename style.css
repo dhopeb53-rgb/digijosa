@@ -2248,8 +2248,7 @@ input:checked + .slider:before {
     border-radius: 10px;
   }
   
-  .photo-card-info-header,
-  .item-card-header {
+  .photo-card-info-header {
     padding: 0 8px;
     height: 20px;
   }
@@ -2433,6 +2432,129 @@ input:checked + .slider:before {
   cursor: pointer;
   transition: all 0.2s ease;
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+/* Mobile-first repair for item entry cards.
+   Keep desktop/tablet density, but make phone entry fields actually usable. */
+@media (max-width: 760px) {
+  .item-form-card {
+    border-radius: 12px;
+  }
+
+  .item-form-card .item-card-header {
+    height: auto;
+    min-height: 0;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 7px;
+  }
+
+  .item-form-card .item-card-title-line {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 6px;
+    width: 100%;
+  }
+
+  .item-form-card .item-num {
+    align-self: center;
+    font-size: 13px;
+  }
+
+  .item-form-card .item-header-type {
+    height: 34px;
+    font-size: 13px;
+    padding: 5px 8px;
+  }
+
+  .item-form-card .item-header-location {
+    grid-column: 1 / -1;
+    height: auto;
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .item-form-card .item-header-location span {
+    font-size: 11px;
+  }
+
+  .item-form-card .item-header-location input {
+    height: 34px;
+    font-size: 13px;
+    padding: 5px 8px;
+  }
+
+  .item-form-card .item-header-status {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+    width: 100%;
+  }
+
+  .item-form-card .item-header-status .checkbox-label-container {
+    justify-content: center;
+    height: 32px;
+    padding: 5px 4px;
+    font-size: 11px;
+  }
+
+  .item-form-card .item-card-actions {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 7px 12px;
+    padding-top: 1px;
+  }
+
+  .item-form-card .btn-item-action,
+  .item-form-card .btn-text-danger {
+    min-height: 28px;
+    font-size: 12px;
+    line-height: 1.2;
+  }
+
+  .item-form-card .item-card-body {
+    padding: 8px;
+    gap: 7px;
+  }
+
+  .item-form-card .item-card-row-1 {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 7px;
+  }
+
+  .item-form-card .item-card-row-1 .form-group:nth-child(1),
+  .item-form-card .item-card-row-1 .form-group:nth-child(2) {
+    grid-column: 1 / -1;
+  }
+
+  .item-form-card .item-card-row-1 input,
+  .item-form-card .item-card-row-1 select,
+  .item-form-card .item-card-row-1 textarea,
+  .item-form-card .item-card-row-2 input.cell-remarks {
+    height: 36px;
+    min-height: 36px;
+    padding: 6px 9px;
+    font-size: 14px;
+  }
+
+  .item-form-card .item-card-row-1 textarea.cell-specs {
+    resize: vertical;
+  }
+
+  .item-form-card .cell-qty {
+    text-align: right !important;
+  }
+
+  .item-form-card .cell-unit-custom {
+    width: 100% !important;
+    height: 36px;
+    font-size: 14px;
+  }
 }
 .btn-drawing-trigger:hover {
   background: var(--primary-light, #eff6ff);
