@@ -1699,7 +1699,7 @@ input:checked + .slider:before {
 .item-card-actions {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   flex-shrink: 0;
 }
 
@@ -1788,7 +1788,7 @@ input:checked + .slider:before {
 .item-header-type {
   height: 26px;
   padding: 3px 6px;
-  font-size: 11px;
+  font-size: 10.5px;
 }
 
 .item-header-location {
@@ -1803,7 +1803,7 @@ input:checked + .slider:before {
 .item-header-location input {
   height: 26px;
   padding: 3px 6px;
-  font-size: 11px;
+  font-size: 10.5px;
 }
 
 .item-header-status {
@@ -1814,7 +1814,7 @@ input:checked + .slider:before {
   height: auto;
   min-height: 0;
   padding: 0;
-  font-size: 11px;
+  font-size: 10.5px;
   border-color: transparent;
   background: transparent;
   color: var(--text-primary);
@@ -2477,13 +2477,14 @@ input:checked + .slider:before {
     height: auto;
     min-height: 0;
     padding: 8px;
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
     align-items: stretch;
-    gap: 7px;
+    gap: 6px 8px;
   }
 
   .item-form-card .item-card-title-line {
+    grid-column: 1 / -1;
     display: grid;
     grid-template-columns: auto minmax(94px, 0.85fr) minmax(0, 1.15fr);
     gap: 6px;
@@ -2518,36 +2519,38 @@ input:checked + .slider:before {
   }
 
   .item-form-card .item-header-status {
-    grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 5px;
-    width: 100%;
+    grid-column: 1;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    width: auto;
+    min-width: max-content;
   }
 
   .item-form-card .item-header-status .checkbox-label-container {
     justify-content: center;
     height: auto;
-    min-height: 28px;
+    min-height: 24px;
     padding: 0;
-    font-size: 12px;
+    font-size: 10.5px;
     border-color: transparent;
     background: transparent;
   }
 
   .item-form-card .item-card-actions {
-    width: 100%;
+    grid-column: 2;
+    width: auto;
     display: flex;
     flex-wrap: wrap;
     justify-content: flex-start;
-    gap: 7px 12px;
+    gap: 7px;
     padding-top: 1px;
   }
 
   .item-form-card .btn-item-action,
   .item-form-card .btn-text-danger {
-    min-height: 28px;
-    font-size: 12px;
+    min-height: 24px;
+    font-size: 10.5px;
     line-height: 1.2;
   }
 
