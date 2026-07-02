@@ -769,7 +769,7 @@ function addTableDataRow(sourceItem = null, insertAfterId = null, options = {}) 
         <div class="item-status-row item-header-status">
           <label class="checkbox-label-container">
             <input type="checkbox" class="cell-ledger">
-            <span class="checkbox-text">건축물대장</span>
+            <span class="checkbox-text">건축물</span>
           </label>
           <label class="checkbox-label-container">
             <input type="checkbox" class="cell-business">

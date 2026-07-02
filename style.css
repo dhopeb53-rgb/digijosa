@@ -1811,9 +1811,36 @@ input:checked + .slider:before {
 }
 
 .item-header-status .checkbox-label-container {
-  height: 24px;
-  padding: 2px 6px;
-  font-size: 10px;
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  font-size: 11px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-primary);
+  font-weight: 700;
+  justify-content: center;
+  line-height: 1;
+}
+
+.item-header-status .checkbox-label-container input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.item-header-status .checkbox-label-container:hover {
+  border-color: transparent;
+  background: transparent;
+  color: var(--accent-primary);
+  text-decoration: underline;
+}
+
+.item-header-status .checkbox-label-container:has(input[type="checkbox"]:checked) {
+  border-color: transparent;
+  background: transparent;
+  color: var(--accent-primary);
+  text-decoration: none;
 }
 
 /* Item Card Rows Layout */
@@ -2500,9 +2527,12 @@ input:checked + .slider:before {
 
   .item-form-card .item-header-status .checkbox-label-container {
     justify-content: center;
-    height: 32px;
-    padding: 5px 4px;
-    font-size: 11px;
+    height: auto;
+    min-height: 28px;
+    padding: 0;
+    font-size: 12px;
+    border-color: transparent;
+    background: transparent;
   }
 
   .item-form-card .item-card-actions {
