@@ -18,8 +18,26 @@ async function handler(req, res) {
         uses: 1,
         expireTime: new Date(now + 5 * 60 * 1000).toISOString(),
         newSessionExpireTime: new Date(now + 60 * 1000).toISOString(),
-        liveConnectConstraints: {
-          model: LIVE_MODEL
+        bidiGenerateContentSetup: {
+          model: `models/${LIVE_MODEL}`,
+          generationConfig: {
+            responseModalities: ['AUDIO'],
+            temperature: 0,
+            maxOutputTokens: 64
+          },
+          inputAudioTranscription: {},
+          realtimeInputConfig: {
+            automaticActivityDetection: {
+              disabled: false,
+              endOfSpeechSensitivity: 'END_SENSITIVITY_HIGH',
+              silenceDurationMs: 500
+            }
+          },
+          systemInstruction: {
+            parts: [{
+              text: '한국어 현장 물건조사 음성을 듣습니다. 음성으로 답하지 말고 입력 음성 전사만 처리하세요.'
+            }]
+          }
         }
       })
     });
