@@ -4,19 +4,17 @@ const { usageSummary } = require('./_usage');
 
 const ITEM_SCHEMA = {
   type: 'object',
-  additionalProperties: false,
   properties: {
     items: {
       type: 'array',
       maxItems: 30,
       items: {
         type: 'object',
-        additionalProperties: false,
         properties: {
           type: { type: 'string' },
           name: { type: 'string' },
           specs: { type: 'string' },
-          qty: { anyOf: [{ type: 'number' }, { type: 'string' }, { type: 'null' }] },
+          qty: { type: ['number', 'string', 'null'] },
           unit: { type: 'string' },
           remarks: { type: 'string' },
           needsReview: { type: 'array', items: { type: 'string' } },
@@ -32,7 +30,7 @@ const ITEM_SCHEMA = {
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return setJson(res, 405, { error: 'POST 요청만 지원합니다.' });
-  if (!process.env.OPENAI_API_KEY) return setJson(res, 503, { error: '서버에 OPENAI_API_KEY가 설정되지 않았습니다.' });
+  if (!process.env.GEMINI_API_KEY) return setJson(res, 503, { error: '서버에 GEMINI_API_KEY가 설정되지 않았습니다.' });
 
   try {
     const body = await readJsonBody(req);
@@ -47,7 +45,7 @@ module.exports = async function handler(req, res) {
 
     const allowedTypes = Array.isArray(body.allowedTypes) ? body.allowedTypes.slice(0, 100) : [];
     const allowedUnits = Array.isArray(body.allowedUnits) ? body.allowedUnits.slice(0, 100) : [];
-    const model = process.env.OPENAI_STRUCTURE_MODEL || 'gpt-5.6-luna';
+    const model = process.env.GEMINI_STRUCTURE_MODEL || 'gemini-3.6-flash';
     const instructions = [
       '당신은 한국어 현장 물건조사 음성을 조사서 필드로 구조화한다.',
       '입력에 명시되지 않은 사실은 절대 추정하거나 생성하지 않는다. 빈 값은 빈 문자열 또는 null로 두고 needsReview에 확인 사유를 넣는다.',
@@ -59,38 +57,31 @@ module.exports = async function handler(req, res) {
       '개인정보 마스킹 표시는 결과의 어떤 필드에도 옮기지 않는다.'
     ].join('\n');
 
-    const response = await fetch('https://api.openai.com/v1/responses', {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        'x-goog-api-key': process.env.GEMINI_API_KEY,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model,
-        reasoning: { effort: 'low' },
-        store: false,
-        instructions,
-        input: privacy.maskedText,
-        text: {
-          format: {
-            type: 'json_schema',
-            name: 'survey_items',
-            strict: true,
-            schema: ITEM_SCHEMA
-          }
+        systemInstruction: { parts: [{ text: instructions }] },
+        contents: [{ role: 'user', parts: [{ text: privacy.maskedText }] }],
+        generationConfig: {
+          temperature: 0,
+          responseMimeType: 'application/json',
+          responseSchema: ITEM_SCHEMA
         }
       })
     });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error?.message || '물건 구조화 서비스 요청에 실패했습니다.');
-    const outputText = data.output_text || data.output?.flatMap((entry) => entry.content || [])
-      .find((content) => content.type === 'output_text')?.text;
-    if (!outputText) throw new Error('AI가 구조화 결과를 반환하지 않았습니다.');
+    if (!response.ok) throw new Error(data.error?.message || 'Gemini 물건 구조화 요청에 실패했습니다.');
+    const outputText = (data.candidates?.[0]?.content?.parts || []).map((part) => part.text || '').join('').trim();
+    if (!outputText) throw new Error('Gemini가 구조화 결과를 반환하지 않았습니다.');
     const parsed = JSON.parse(outputText);
 
     setJson(res, 200, {
       items: parsed.items || [],
-      usage: usageSummary(model, data.usage || {})
+      usage: usageSummary(model, data.usageMetadata || {})
     });
   } catch (error) {
     setJson(res, 502, { error: error.message || '물건 목록 생성 중 오류가 발생했습니다.' });

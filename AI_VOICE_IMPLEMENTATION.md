@@ -2,7 +2,9 @@
 
 ## 배포 구성
 
-정적 화면은 기존과 동일하게 동작한다. `/api/transcribe`와 `/api/structure-items`를 지원하는 Node.js 서버리스 환경에 함께 배포하고 `OPENAI_API_KEY`를 서버 환경변수로 설정한다. API가 없거나 실패해도 기존 직접 등록, 사진대지, Excel, ZIP 기능에는 영향이 없다.
+정적 화면은 기존과 동일하게 동작한다. `/api/transcribe`와 `/api/structure-items`를 지원하는 Node.js 서버리스 환경에 함께 배포하고 `GEMINI_API_KEY`를 서버 환경변수로 설정한다. API가 없거나 실패해도 기존 직접 등록, 사진대지, Excel, ZIP 기능에는 영향이 없다.
+
+브라우저 녹음은 Gemini 공식 지원 형식인 PCM WAV로 생성한다. 최대 60초 녹음은 서버에 영구 저장하지 않고 Gemini API에 인라인 데이터로 전달한다.
 
 ## 개인정보 분리
 

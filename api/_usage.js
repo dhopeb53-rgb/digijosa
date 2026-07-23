@@ -1,20 +1,17 @@
 function estimateTextCost(model, usage = {}) {
-  const pricing = {
-    'gpt-5.6-luna': { input: 1, output: 6 },
-    'gpt-5.6-terra': { input: 2.5, output: 15 },
-    'gpt-5.6-sol': { input: 5, output: 30 }
-  };
-  const rate = pricing[model];
-  if (!rate) return null;
-  return Number((((usage.input_tokens || 0) * rate.input + (usage.output_tokens || 0) * rate.output) / 1_000_000).toFixed(6));
+  const inputRate = Number(process.env.GEMINI_INPUT_USD_PER_MILLION);
+  const outputRate = Number(process.env.GEMINI_OUTPUT_USD_PER_MILLION);
+  if (!Number.isFinite(inputRate) || !Number.isFinite(outputRate)) return null;
+  return Number((((usage.promptTokenCount || 0) * inputRate + (usage.candidatesTokenCount || 0) * outputRate) / 1_000_000).toFixed(6));
 }
 
 function usageSummary(model, usage = {}) {
   return {
     model,
-    inputTokens: usage.input_tokens || 0,
-    outputTokens: usage.output_tokens || 0,
-    totalTokens: usage.total_tokens || 0,
+    provider: 'gemini',
+    inputTokens: usage.promptTokenCount || 0,
+    outputTokens: usage.candidatesTokenCount || 0,
+    totalTokens: usage.totalTokenCount || 0,
     estimatedCostUsd: estimateTextCost(model, usage)
   };
 }
