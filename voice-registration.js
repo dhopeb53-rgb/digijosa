@@ -218,10 +218,13 @@
           }
         }));
       };
-      socket.onmessage = (event) => {
+      socket.onmessage = async (event) => {
         let message;
         try {
-          message = JSON.parse(event.data);
+          let payload = event.data;
+          if (payload instanceof Blob) payload = await payload.text();
+          if (payload instanceof ArrayBuffer) payload = new TextDecoder().decode(payload);
+          message = JSON.parse(payload);
         } catch (_) {
           return;
         }
