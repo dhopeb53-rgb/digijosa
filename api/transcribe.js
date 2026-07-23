@@ -15,7 +15,7 @@ async function handler(req, res) {
       return setJson(res, 415, { error: 'Gemini가 지원하지 않는 녹음 형식입니다. WAV 형식으로 다시 녹음해 주세요.' });
     }
     // Flash-Lite accepts audio input and is optimized for short, low-latency tasks.
-    const model = process.env.GEMINI_AUDIO_MODEL || 'gemini-2.5-flash-lite';
+    const model = process.env.GEMINI_AUDIO_MODEL || 'gemini-3.1-flash-lite';
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
       method: 'POST',
       headers: {
@@ -32,8 +32,7 @@ async function handler(req, res) {
         }],
         generationConfig: {
           temperature: 0,
-          maxOutputTokens: 256,
-          thinkingConfig: { thinkingBudget: 0 }
+          maxOutputTokens: 256
         }
       })
     });
