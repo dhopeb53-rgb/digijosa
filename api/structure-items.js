@@ -14,7 +14,7 @@ const ITEM_SCHEMA = {
           type: { type: 'string' },
           name: { type: 'string' },
           specs: { type: 'string' },
-          qty: { type: ['number', 'string', 'null'] },
+          qty: { type: 'string', description: '원문에 나온 수량. 불명확하거나 없으면 빈 문자열' },
           unit: { type: 'string' },
           remarks: { type: 'string' },
           needsReview: { type: 'array', items: { type: 'string' } },
