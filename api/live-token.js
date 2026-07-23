@@ -15,13 +15,11 @@ async function handler(req, res) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        authToken: {
-          uses: 1,
-          expireTime: new Date(now + 5 * 60 * 1000).toISOString(),
-          newSessionExpireTime: new Date(now + 60 * 1000).toISOString(),
-          liveConnectConstraints: {
-            model: LIVE_MODEL
-          }
+        uses: 1,
+        expireTime: new Date(now + 5 * 60 * 1000).toISOString(),
+        newSessionExpireTime: new Date(now + 60 * 1000).toISOString(),
+        liveConnectConstraints: {
+          model: LIVE_MODEL
         }
       })
     });
