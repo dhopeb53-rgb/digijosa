@@ -19,7 +19,7 @@ module.exports = async function handler(req, res) {
 
     const allowedTypes = Array.isArray(body.allowedTypes) ? body.allowedTypes.slice(0, 100) : [];
     const allowedUnits = Array.isArray(body.allowedUnits) ? body.allowedUnits.slice(0, 100) : [];
-    const model = process.env.GEMINI_STRUCTURE_MODEL || 'gemini-3.6-flash';
+    const model = process.env.GEMINI_STRUCTURE_MODEL || 'gemini-3.1-flash-lite';
     const instructions = [
       '당신은 한국어 현장 물건조사 음성을 조사서 필드로 구조화한다.',
       '입력에 명시되지 않은 사실은 절대 추정하거나 생성하지 않는다. 빈 값은 빈 문자열 또는 null로 두고 needsReview에 확인 사유를 넣는다.',
@@ -32,6 +32,7 @@ module.exports = async function handler(req, res) {
       '개인정보 마스킹 표시는 결과의 어떤 필드에도 옮기지 않는다.'
     ].join('\n');
 
+    const startedAt = Date.now();
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
       method: 'POST',
       headers: {
@@ -43,7 +44,9 @@ module.exports = async function handler(req, res) {
         contents: [{ role: 'user', parts: [{ text: privacy.maskedText }] }],
         generationConfig: {
           temperature: 0,
-          responseMimeType: 'application/json'
+          responseMimeType: 'application/json',
+          maxOutputTokens: 1200,
+          thinkingConfig: { thinkingLevel: 'minimal' }
         }
       })
     });
@@ -66,6 +69,7 @@ module.exports = async function handler(req, res) {
 
     setJson(res, 200, {
       items,
+      processingMs: Date.now() - startedAt,
       usage: usageSummary(model, data.usageMetadata || {})
     });
   } catch (error) {
