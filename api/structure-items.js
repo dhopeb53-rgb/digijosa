@@ -7,7 +7,6 @@ const ITEM_SCHEMA = {
   properties: {
     items: {
       type: 'array',
-      maxItems: 30,
       items: {
         type: 'object',
         properties: {
@@ -20,12 +19,10 @@ const ITEM_SCHEMA = {
           needsReview: { type: 'array', items: { type: 'string' } },
           boundaryUncertain: { type: 'boolean' },
           sourceExcerpt: { type: 'string' }
-        },
-        required: ['type', 'name', 'specs', 'qty', 'unit', 'remarks', 'needsReview', 'boundaryUncertain', 'sourceExcerpt']
+        }
       }
     }
-  },
-  required: ['items']
+  }
 };
 
 module.exports = async function handler(req, res) {
