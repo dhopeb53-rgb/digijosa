@@ -242,6 +242,16 @@
             <p>여기에 작성된 행 목록이 사진대지(탭3) 카드 목록 및 물건내역 시트로 자동 매핑됩니다.</p>
           </div>
           <div class="card-body">
+            <div class="voice-entry-panel">
+              <div>
+                <strong><i data-lucide="mic"></i> 말해서 물건 등록</strong>
+                <p>물건명, 구조·규격, 수량·단위, 비고만 말씀해 주세요. 소유자 정보와 주소는 음성에 포함하지 마세요.</p>
+              </div>
+              <button type="button" class="btn-voice-entry" id="btnOpenVoiceEntry">
+                <i data-lucide="mic"></i> AI 음성으로 일괄 등록
+              </button>
+              <span class="voice-optional-badge">선택 기능</span>
+            </div>
             <div class="item-cards-list" id="itemCardsList">
               <!-- Item cards will be dynamically loaded here -->
             </div>
@@ -335,6 +345,93 @@
           <button type="button" class="btn-signature-clear" id="btnSignatureClear">전체 지우기</button>
           <button type="button" class="btn-signature-save" id="btnSignatureSave">저장</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI Voice Item Registration Modal -->
+  <div class="voice-modal hidden" id="voiceItemModal" role="dialog" aria-modal="true" aria-labelledby="voiceModalTitle">
+    <div class="voice-modal-panel">
+      <div class="voice-modal-header">
+        <div>
+          <strong id="voiceModalTitle">AI 음성 물건등록</strong>
+          <small>음성 파일은 처리 후 서버에 저장하지 않습니다.</small>
+        </div>
+        <button type="button" class="btn-close-voice" id="btnCloseVoiceModal" aria-label="음성 등록 닫기">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+
+      <div class="voice-steps" aria-label="진행 단계">
+        <span class="active" data-voice-step-indicator="record">1. 녹음</span>
+        <span data-voice-step-indicator="transcript">2. 원문 확인</span>
+        <span data-voice-step-indicator="review">3. 물건 검토</span>
+      </div>
+
+      <div class="voice-modal-body">
+        <section class="voice-step" data-voice-step="record">
+          <div class="privacy-boundary-notice">
+            <i data-lucide="shield-check"></i>
+            <div>
+              <strong>물건 속성만 녹음해 주세요.</strong>
+              <p>소유자 성명, 주소, 연락처, 주민등록번호는 기존 기본조사서에서만 입력하세요. 개인정보가 감지되면 구조화 AI 전송 전에 자동으로 제외됩니다.</p>
+            </div>
+          </div>
+          <p class="voice-example">예: “철제 컨테이너 창고 한 동, 3미터 곱하기 6미터, 현재 미사용.”</p>
+          <div class="recorder-card">
+            <div class="recording-status" id="voiceRecordingStatus">녹음 준비</div>
+            <div class="voice-meter" aria-label="마이크 입력 음량">
+              <span id="voiceMeterFill"></span>
+            </div>
+            <div class="voice-timer" id="voiceTimer">00:00 / 01:00</div>
+            <p class="voice-volume-help" id="voiceVolumeHelp">녹음 버튼을 누르고 기기 가까이에서 말씀해 주세요.</p>
+            <div class="voice-action-row">
+              <button type="button" class="btn-voice-primary" id="btnStartVoiceRecording"><i data-lucide="mic"></i> 녹음 시작</button>
+              <button type="button" class="btn-voice-danger hidden" id="btnStopVoiceRecording"><i data-lucide="square"></i> 녹음 완료</button>
+            </div>
+          </div>
+          <div class="voice-queue-box hidden" id="voiceQueueBox">
+            <strong>전송 대기 녹음 <span id="voiceQueueCount">0</span>건</strong>
+            <p>네트워크 연결 후 순서대로 다시 처리할 수 있습니다.</p>
+            <div class="voice-action-row">
+              <button type="button" class="btn-voice-secondary" id="btnRetryVoiceQueue">대기 녹음 재전송</button>
+              <button type="button" class="btn-text-danger" id="btnClearVoiceQueue">대기 녹음 삭제</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="voice-step hidden" data-voice-step="transcript">
+          <label for="voiceTranscript"><strong>인식된 원문</strong></label>
+          <p class="field-help">숫자·단위와 물건 경계를 확인한 뒤 필요하면 직접 수정하세요.</p>
+          <textarea id="voiceTranscript" rows="8"></textarea>
+          <div class="privacy-detection-result hidden" id="privacyDetectionResult"></div>
+          <label class="voice-consent-row hidden" id="privacyProceedRow">
+            <input type="checkbox" id="privacyProceedConsent">
+            <span>마스킹된 원문에 개인정보가 남아 있지 않은지 확인했습니다.</span>
+          </label>
+          <div class="voice-action-row voice-action-row-between">
+            <button type="button" class="btn-voice-secondary" id="btnBackToRecording">다시 녹음</button>
+            <button type="button" class="btn-voice-primary" id="btnStructureVoiceItems">AI로 물건 목록 만들기</button>
+          </div>
+        </section>
+
+        <section class="voice-step hidden" data-voice-step="review">
+          <div class="voice-review-summary">
+            <strong id="voiceReviewSummary">분석 결과</strong>
+            <p>각 카드는 하나의 물건입니다. 숫자·단위는 반드시 확인해 주세요.</p>
+          </div>
+          <div class="voice-item-drafts" id="voiceItemDrafts"></div>
+          <div class="voice-action-row voice-action-row-between">
+            <button type="button" class="btn-voice-secondary" id="btnBackToTranscript">원문 다시 확인</button>
+            <button type="button" class="btn-voice-primary" id="btnRegisterVoiceItems">선택한 물건 등록</button>
+          </div>
+        </section>
+
+        <div class="voice-processing hidden" id="voiceProcessing" role="status" aria-live="polite">
+          <span class="voice-spinner"></span>
+          <strong id="voiceProcessingText">처리 중...</strong>
+        </div>
+        <div class="voice-error hidden" id="voiceError" role="alert"></div>
       </div>
     </div>
   </div>
@@ -459,11 +556,13 @@
   <script src="state.js?v=20260702_07"></script>
   <script src="utils.js?v=20260702_07"></script>
   <script src="address.js?v=20260702_07"></script>
+  <script src="privacy-filter.js?v=20260723_01"></script>
   
   <!-- Base64 Template Data -->
   <script src="template_data.js"></script>
   
   <!-- Core Logic script -->
   <script src="app.js?v=20260702_07"></script>
+  <script src="voice-registration.js?v=20260723_01"></script>
 </body>
 </html>
