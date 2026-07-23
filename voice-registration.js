@@ -542,7 +542,8 @@
       return;
     }
 
-    setProcessing(true, '물건별 내용을 분류하고 있습니다...');
+    setProcessing(true, '물건별 내용을 빠르게 정리하고 있습니다...');
+    const structureStartedAt = Date.now();
     try {
       const data = await apiFetch('/api/structure-items', {
         method: 'POST',
@@ -559,6 +560,8 @@
       setStep('review');
       logVoiceMetric('structure_success', {
         itemCount: state.drafts.length,
+        processingMs: data.processingMs || Date.now() - structureStartedAt,
+        totalElapsedMs: Date.now() - structureStartedAt,
         personalInfoMasked: privacy.detections.length,
         inputTokens: data.usage?.inputTokens || 0,
         outputTokens: data.usage?.outputTokens || 0,
