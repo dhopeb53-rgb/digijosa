@@ -7,6 +7,8 @@
 
   const MAX_SECONDS = 60;
   const TRANSCRIPTION_SAMPLE_RATE = 16000;
+  const LIVE_MODEL = 'gemini-3.1-flash-live-preview';
+  const LIVE_SOCKET_URL = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained';
   const DB_NAME = 'digijosa-voice-queue';
   const STORE_NAME = 'recordings';
   const API_BASE = (window.DIGIJOSA_API_BASE || '').replace(/\/$/, '');
@@ -26,7 +28,13 @@
     durationSeconds: 0,
     currentBlob: null,
     drafts: [],
-    transcript: ''
+    transcript: '',
+    liveSocket: null,
+    liveReady: false,
+    liveFailed: false,
+    liveTranscript: '',
+    lastLiveTranscriptAt: 0,
+    liveDoneResolve: null
   };
 
   const $ = (id) => document.getElementById(id);
@@ -91,6 +99,18 @@
     state.audioContext = null;
   }
 
+  function closeLiveSocket() {
+    state.liveReady = false;
+    state.liveDoneResolve?.();
+    state.liveDoneResolve = null;
+    if (state.liveSocket) {
+      state.liveSocket.onclose = null;
+      state.liveSocket.onerror = null;
+      if (state.liveSocket.readyState < WebSocket.CLOSING) state.liveSocket.close();
+    }
+    state.liveSocket = null;
+  }
+
   function formatTimer(seconds) {
     return `00:${String(Math.min(60, seconds)).padStart(2, '0')} / 01:00`;
   }
@@ -102,6 +122,16 @@
       return;
     }
     try {
+      $('voiceRecordingStatus').textContent = '실시간 음성인식 연결 중...';
+      $('btnStartVoiceRecording').disabled = true;
+      try {
+        await connectLiveTranscription();
+      } catch (liveError) {
+        state.liveFailed = true;
+        closeLiveSocket();
+        $('voiceVolumeHelp').textContent = '실시간 연결이 어려워 기존 안전 모드로 녹음합니다.';
+        logVoiceMetric('live_connection_failure', { reason: liveError.message });
+      }
       state.stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
       });
@@ -121,7 +151,9 @@
       silentGain.connect(state.audioContext.destination);
       state.audioProcessor.onaudioprocess = (event) => {
         if (!state.isRecording) return;
-        state.pcmChunks.push(new Float32Array(event.inputBuffer.getChannelData(0)));
+        const chunk = new Float32Array(event.inputBuffer.getChannelData(0));
+        state.pcmChunks.push(chunk);
+        if (state.liveReady) sendLiveAudioChunk(chunk, state.sampleRate);
       };
       state.startedAt = Date.now();
       state.durationSeconds = 0;
@@ -130,13 +162,124 @@
       $('btnStopVoiceRecording').classList.remove('hidden');
       $('voiceRecordingStatus').textContent = '● 녹음 중';
       $('voiceRecordingStatus').classList.add('is-recording');
+      $('voiceLiveTranscript').classList.remove('hidden');
+      $('voiceLiveTranscript').textContent = state.liveReady
+        ? '말씀하시면 여기에 실시간으로 표시됩니다.'
+        : '녹음 완료 후 텍스트로 변환합니다.';
       beginTimer();
       beginMeter(analyser);
     } catch (error) {
+      closeLiveSocket();
       showError(error.name === 'NotAllowedError'
         ? '마이크 권한이 거부되었습니다. 브라우저 설정에서 권한을 허용하거나 직접 등록을 이용해 주세요.'
         : `마이크를 시작하지 못했습니다: ${error.message}`);
+    } finally {
+      $('btnStartVoiceRecording').disabled = false;
     }
+  }
+
+  async function connectLiveTranscription() {
+    if (!navigator.onLine || typeof WebSocket === 'undefined') throw new Error('실시간 연결을 지원하지 않는 환경입니다.');
+    state.liveFailed = false;
+    state.liveTranscript = '';
+    const tokenData = await apiFetch('/api/live-token', { method: 'POST' });
+    if (!tokenData.token) throw new Error('실시간 음성인식 토큰을 받지 못했습니다.');
+
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        closeLiveSocket();
+        reject(new Error('실시간 음성인식 연결 시간이 초과되었습니다.'));
+      }, 7000);
+      const socket = new WebSocket(`${LIVE_SOCKET_URL}?access_token=${encodeURIComponent(tokenData.token)}`);
+      state.liveSocket = socket;
+
+      socket.onopen = () => {
+        socket.send(JSON.stringify({
+          setup: {
+            model: `models/${tokenData.model || LIVE_MODEL}`,
+            generationConfig: {
+              responseModalities: ['AUDIO'],
+              temperature: 0,
+              maxOutputTokens: 64
+            },
+            inputAudioTranscription: {},
+            realtimeInputConfig: {
+              automaticActivityDetection: {
+                disabled: false,
+                endOfSpeechSensitivity: 'END_SENSITIVITY_HIGH',
+                silenceDurationMs: 500
+              }
+            },
+            systemInstruction: {
+              parts: [{
+                text: '한국어 현장 물건조사 음성을 듣습니다. 음성으로 답하지 말고 입력 음성 전사만 처리하세요.'
+              }]
+            }
+          }
+        }));
+      };
+      socket.onmessage = (event) => {
+        let message;
+        try {
+          message = JSON.parse(event.data);
+        } catch (_) {
+          return;
+        }
+        if (message.setupComplete) {
+          clearTimeout(timeout);
+          state.liveReady = true;
+          resolve();
+          return;
+        }
+        const inputText = message.serverContent?.inputTranscription?.text;
+        if (inputText) appendLiveTranscript(inputText);
+        if (message.error) {
+          state.liveFailed = true;
+          state.liveDoneResolve?.();
+        }
+      };
+      socket.onerror = () => {
+        clearTimeout(timeout);
+        state.liveFailed = true;
+        if (!state.liveReady) reject(new Error('Gemini Live 연결에 실패했습니다.'));
+        state.liveDoneResolve?.();
+      };
+      socket.onclose = () => {
+        clearTimeout(timeout);
+        if (state.isRecording) state.liveFailed = true;
+        state.liveReady = false;
+        state.liveDoneResolve?.();
+      };
+    });
+  }
+
+  function appendLiveTranscript(text) {
+    const cleaned = String(text).replace(/\s+/g, ' ').trim();
+    if (!cleaned) return;
+    state.liveTranscript = `${state.liveTranscript}${state.liveTranscript && !/[\s]$/.test(state.liveTranscript) ? ' ' : ''}${cleaned}`.trim();
+    state.lastLiveTranscriptAt = Date.now();
+    $('voiceLiveTranscript').textContent = state.liveTranscript;
+  }
+
+  function sendLiveAudioChunk(chunk, inputSampleRate) {
+    if (!state.liveSocket || state.liveSocket.readyState !== WebSocket.OPEN) return;
+    const samples = downsamplePcm([chunk], inputSampleRate, TRANSCRIPTION_SAMPLE_RATE)[0];
+    const bytes = new Uint8Array(samples.length * 2);
+    const view = new DataView(bytes.buffer);
+    for (let i = 0; i < samples.length; i++) {
+      const sample = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(i * 2, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+    }
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    state.liveSocket.send(JSON.stringify({
+      realtimeInput: {
+        audio: {
+          data: btoa(binary),
+          mimeType: `audio/pcm;rate=${TRANSCRIPTION_SAMPLE_RATE}`
+        }
+      }
+    }));
   }
 
   function beginTimer() {
@@ -174,13 +317,57 @@
       downsamplePcm(state.pcmChunks, state.sampleRate, TRANSCRIPTION_SAMPLE_RATE),
       TRANSCRIPTION_SAMPLE_RATE
     );
+    const hadLiveConnection = state.liveReady;
+    if (hadLiveConnection && state.liveSocket?.readyState === WebSocket.OPEN) {
+      state.liveSocket.send(JSON.stringify({ realtimeInput: { audioStreamEnd: true } }));
+    }
     stopMedia();
     if (state.currentBlob.size < 1000) {
       showError('녹음된 음성이 너무 짧습니다. 다시 녹음해 주세요.');
       resetRecorderUi();
       return;
     }
+    if (hadLiveConnection) {
+      $('voiceRecordingStatus').textContent = '실시간 원문 마무리 중';
+      await waitForLiveTranscript();
+    }
+    const liveText = state.liveTranscript.trim();
+    closeLiveSocket();
+    if (liveText && !state.liveFailed) {
+      state.transcript = liveText;
+      $('voiceTranscript').value = liveText;
+      runPrivacyPreview();
+      setStep('transcript');
+      logVoiceMetric('live_transcription_success', {
+        durationSeconds: state.durationSeconds,
+        characterCount: liveText.length
+      });
+      return;
+    }
     await transcribeCurrentBlob();
+  }
+
+  function waitForLiveTranscript() {
+    setProcessing(true, '실시간 인식 결과를 마무리하고 있습니다...');
+    return new Promise((resolve) => {
+      let settled = false;
+      const startedAt = Date.now();
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearInterval(checkTimer);
+        state.liveDoneResolve = null;
+        setProcessing(false);
+        resolve();
+      };
+      state.liveDoneResolve = finish;
+      const checkTimer = setInterval(() => {
+        const hasSettledText = state.liveTranscript
+          && Date.now() - state.lastLiveTranscriptAt >= 600
+          && Date.now() - startedAt >= 300;
+        if (hasSettledText || Date.now() - startedAt >= 2500) finish();
+      }, 100);
+    });
   }
 
   function downsamplePcm(chunks, inputSampleRate, outputSampleRate) {
@@ -242,15 +429,21 @@
     $('voiceRecordingStatus').classList.remove('is-recording');
     $('voiceMeterFill').style.width = '0';
     $('voiceTimer').textContent = '00:00 / 01:00';
+    $('voiceLiveTranscript').classList.add('hidden');
+    $('voiceLiveTranscript').textContent = '';
   }
 
   function resetVoiceSession() {
     stopMedia();
+    closeLiveSocket();
     state.pcmChunks = [];
     state.durationSeconds = 0;
     state.currentBlob = null;
     state.drafts = [];
     state.transcript = '';
+    state.liveFailed = false;
+    state.liveTranscript = '';
+    state.lastLiveTranscriptAt = 0;
     $('voiceTranscript').value = '';
     $('voiceItemDrafts').innerHTML = '';
     $('privacyDetectionResult').classList.add('hidden');
