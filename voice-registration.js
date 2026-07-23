@@ -6,6 +6,7 @@
   'use strict';
 
   const MAX_SECONDS = 60;
+  const TRANSCRIPTION_SAMPLE_RATE = 16000;
   const DB_NAME = 'digijosa-voice-queue';
   const STORE_NAME = 'recordings';
   const API_BASE = (window.DIGIJOSA_API_BASE || '').replace(/\/$/, '');
@@ -58,6 +59,7 @@
   }
 
   function openModal() {
+    resetVoiceSession();
     modal.classList.remove('hidden');
     document.body.classList.add('modal-open');
     setStep('record');
@@ -67,6 +69,7 @@
 
   function closeModal() {
     stopMedia();
+    resetVoiceSession();
     modal.classList.add('hidden');
     document.body.classList.remove('modal-open');
   }
@@ -167,7 +170,10 @@
     cancelAnimationFrame(state.meterFrame);
     $('btnStopVoiceRecording').classList.add('hidden');
     $('voiceRecordingStatus').textContent = '녹음 처리 중';
-    state.currentBlob = encodeWav(state.pcmChunks, state.sampleRate);
+    state.currentBlob = encodeWav(
+      downsamplePcm(state.pcmChunks, state.sampleRate, TRANSCRIPTION_SAMPLE_RATE),
+      TRANSCRIPTION_SAMPLE_RATE
+    );
     stopMedia();
     if (state.currentBlob.size < 1000) {
       showError('녹음된 음성이 너무 짧습니다. 다시 녹음해 주세요.');
@@ -175,6 +181,28 @@
       return;
     }
     await transcribeCurrentBlob();
+  }
+
+  function downsamplePcm(chunks, inputSampleRate, outputSampleRate) {
+    const inputLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+    const input = new Float32Array(inputLength);
+    let inputOffset = 0;
+    chunks.forEach((chunk) => {
+      input.set(chunk, inputOffset);
+      inputOffset += chunk.length;
+    });
+    if (inputSampleRate <= outputSampleRate) return [input];
+
+    const ratio = inputSampleRate / outputSampleRate;
+    const output = new Float32Array(Math.floor(input.length / ratio));
+    for (let i = 0; i < output.length; i++) {
+      const start = Math.floor(i * ratio);
+      const end = Math.min(input.length, Math.floor((i + 1) * ratio));
+      let sum = 0;
+      for (let j = start; j < end; j++) sum += input[j];
+      output[i] = sum / Math.max(1, end - start);
+    }
+    return [output];
   }
 
   function encodeWav(chunks, sampleRate) {
@@ -214,6 +242,23 @@
     $('voiceRecordingStatus').classList.remove('is-recording');
     $('voiceMeterFill').style.width = '0';
     $('voiceTimer').textContent = '00:00 / 01:00';
+  }
+
+  function resetVoiceSession() {
+    stopMedia();
+    state.pcmChunks = [];
+    state.durationSeconds = 0;
+    state.currentBlob = null;
+    state.drafts = [];
+    state.transcript = '';
+    $('voiceTranscript').value = '';
+    $('voiceItemDrafts').innerHTML = '';
+    $('privacyDetectionResult').classList.add('hidden');
+    $('privacyProceedRow').classList.add('hidden');
+    $('privacyProceedConsent').checked = false;
+    setProcessing(false);
+    hideError();
+    resetRecorderUi();
   }
 
   async function apiFetch(path, options) {
