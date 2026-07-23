@@ -13,8 +13,11 @@
   const configuredUnits = () => typeof SURVEY_ITEM_UNITS !== 'undefined' ? SURVEY_ITEM_UNITS : [];
   const state = {
     stream: null,
-    recorder: null,
-    chunks: [],
+    audioProcessor: null,
+    audioSource: null,
+    pcmChunks: [],
+    sampleRate: 44100,
+    isRecording: false,
     timerId: null,
     meterFrame: null,
     audioContext: null,
@@ -71,11 +74,17 @@
   function stopMedia() {
     clearInterval(state.timerId);
     cancelAnimationFrame(state.meterFrame);
-    if (state.recorder && state.recorder.state === 'recording') state.recorder.stop();
+    state.isRecording = false;
+    if (state.audioProcessor) {
+      state.audioProcessor.onaudioprocess = null;
+      state.audioProcessor.disconnect();
+    }
+    if (state.audioSource) state.audioSource.disconnect();
     if (state.stream) state.stream.getTracks().forEach((track) => track.stop());
     if (state.audioContext) state.audioContext.close().catch(() => {});
     state.stream = null;
-    state.recorder = null;
+    state.audioProcessor = null;
+    state.audioSource = null;
     state.audioContext = null;
   }
 
@@ -83,14 +92,9 @@
     return `00:${String(Math.min(60, seconds)).padStart(2, '0')} / 01:00`;
   }
 
-  function selectMimeType() {
-    const candidates = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/webm'];
-    return candidates.find((type) => window.MediaRecorder && MediaRecorder.isTypeSupported(type)) || '';
-  }
-
   async function startRecording() {
     hideError();
-    if (!navigator.mediaDevices || !window.MediaRecorder) {
+    if (!navigator.mediaDevices || !(window.AudioContext || window.webkitAudioContext)) {
       showError('이 브라우저에서는 음성 녹음을 지원하지 않습니다. 기존 직접 등록을 이용해 주세요.');
       return;
     }
@@ -98,32 +102,33 @@
       state.stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
       });
-      const mimeType = selectMimeType();
-      state.recorder = new MediaRecorder(state.stream, mimeType ? { mimeType } : undefined);
-      state.chunks = [];
+      state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      await state.audioContext.resume();
+      state.sampleRate = state.audioContext.sampleRate;
+      state.pcmChunks = [];
+      state.audioSource = state.audioContext.createMediaStreamSource(state.stream);
+      const analyser = state.audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      state.audioSource.connect(analyser);
+      state.audioProcessor = state.audioContext.createScriptProcessor(4096, 1, 1);
+      const silentGain = state.audioContext.createGain();
+      silentGain.gain.value = 0;
+      state.audioSource.connect(state.audioProcessor);
+      state.audioProcessor.connect(silentGain);
+      silentGain.connect(state.audioContext.destination);
+      state.audioProcessor.onaudioprocess = (event) => {
+        if (!state.isRecording) return;
+        state.pcmChunks.push(new Float32Array(event.inputBuffer.getChannelData(0)));
+      };
       state.startedAt = Date.now();
       state.durationSeconds = 0;
-      state.recorder.ondataavailable = (event) => {
-        if (event.data.size) state.chunks.push(event.data);
-      };
-      state.recorder.onstop = async () => {
-        const blobType = state.recorder?.mimeType || mimeType || 'audio/webm';
-        state.currentBlob = new Blob(state.chunks, { type: blobType });
-        stopMedia();
-        if (state.currentBlob.size < 1000) {
-          showError('녹음된 음성이 너무 짧습니다. 다시 녹음해 주세요.');
-          resetRecorderUi();
-          return;
-        }
-        await transcribeCurrentBlob();
-      };
-      state.recorder.start(250);
+      state.isRecording = true;
       $('btnStartVoiceRecording').classList.add('hidden');
       $('btnStopVoiceRecording').classList.remove('hidden');
       $('voiceRecordingStatus').textContent = '● 녹음 중';
       $('voiceRecordingStatus').classList.add('is-recording');
       beginTimer();
-      beginMeter(state.stream);
+      beginMeter(analyser);
     } catch (error) {
       showError(error.name === 'NotAllowedError'
         ? '마이크 권한이 거부되었습니다. 브라우저 설정에서 권한을 허용하거나 직접 등록을 이용해 주세요.'
@@ -139,11 +144,7 @@
     }, 250);
   }
 
-  function beginMeter(stream) {
-    state.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const analyser = state.audioContext.createAnalyser();
-    analyser.fftSize = 256;
-    state.audioContext.createMediaStreamSource(stream).connect(analyser);
+  function beginMeter(analyser) {
     const data = new Uint8Array(analyser.frequencyBinCount);
     const draw = () => {
       analyser.getByteFrequencyData(data);
@@ -159,12 +160,51 @@
     draw();
   }
 
-  function stopRecording() {
-    if (state.recorder && state.recorder.state === 'recording') {
-      state.recorder.stop();
-      $('btnStopVoiceRecording').classList.add('hidden');
-      $('voiceRecordingStatus').textContent = '녹음 처리 중';
+  async function stopRecording() {
+    if (!state.isRecording) return;
+    state.isRecording = false;
+    clearInterval(state.timerId);
+    cancelAnimationFrame(state.meterFrame);
+    $('btnStopVoiceRecording').classList.add('hidden');
+    $('voiceRecordingStatus').textContent = '녹음 처리 중';
+    state.currentBlob = encodeWav(state.pcmChunks, state.sampleRate);
+    stopMedia();
+    if (state.currentBlob.size < 1000) {
+      showError('녹음된 음성이 너무 짧습니다. 다시 녹음해 주세요.');
+      resetRecorderUi();
+      return;
     }
+    await transcribeCurrentBlob();
+  }
+
+  function encodeWav(chunks, sampleRate) {
+    const length = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+    const buffer = new ArrayBuffer(44 + length * 2);
+    const view = new DataView(buffer);
+    const writeAscii = (offset, text) => {
+      for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i));
+    };
+    writeAscii(0, 'RIFF');
+    view.setUint32(4, 36 + length * 2, true);
+    writeAscii(8, 'WAVE');
+    writeAscii(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeAscii(36, 'data');
+    view.setUint32(40, length * 2, true);
+    let offset = 44;
+    chunks.forEach((chunk) => {
+      for (let i = 0; i < chunk.length; i++, offset += 2) {
+        const sample = Math.max(-1, Math.min(1, chunk[i]));
+        view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+      }
+    });
+    return new Blob([buffer], { type: 'audio/wav' });
   }
 
   function resetRecorderUi() {
