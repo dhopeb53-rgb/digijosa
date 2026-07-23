@@ -19,7 +19,7 @@ module.exports = async function handler(req, res) {
 
     const allowedTypes = Array.isArray(body.allowedTypes) ? body.allowedTypes.slice(0, 100) : [];
     const allowedUnits = Array.isArray(body.allowedUnits) ? body.allowedUnits.slice(0, 100) : [];
-    const model = process.env.GEMINI_STRUCTURE_MODEL || 'gemini-3.1-flash-lite';
+    const model = process.env.GEMINI_STRUCTURE_MODEL || 'gemini-3.5-flash-lite';
     const instructions = [
       '당신은 한국어 현장 물건조사 음성을 조사서 필드로 구조화한다.',
       '입력에 명시되지 않은 사실은 절대 추정하거나 생성하지 않는다. 빈 값은 빈 문자열 또는 null로 두고 needsReview에 확인 사유를 넣는다.',
@@ -45,8 +45,7 @@ module.exports = async function handler(req, res) {
         generationConfig: {
           temperature: 0,
           responseMimeType: 'application/json',
-          maxOutputTokens: 1200,
-          thinkingConfig: { thinkingLevel: 'minimal' }
+          maxOutputTokens: 1200
         }
       })
     });
