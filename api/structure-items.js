@@ -2,29 +2,6 @@ const { setJson, readJsonBody } = require('./_http');
 const { maskPersonalInfo } = require('./_privacy');
 const { usageSummary } = require('./_usage');
 
-const ITEM_SCHEMA = {
-  type: 'object',
-  properties: {
-    items: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          type: { type: 'string' },
-          name: { type: 'string' },
-          specs: { type: 'string' },
-          qty: { type: 'string', description: '원문에 나온 수량. 불명확하거나 없으면 빈 문자열' },
-          unit: { type: 'string' },
-          remarks: { type: 'string' },
-          needsReview: { type: 'array', items: { type: 'string' } },
-          boundaryUncertain: { type: 'boolean' },
-          sourceExcerpt: { type: 'string' }
-        }
-      }
-    }
-  }
-};
-
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return setJson(res, 405, { error: 'POST 요청만 지원합니다.' });
   if (!process.env.GEMINI_API_KEY) return setJson(res, 503, { error: '서버에 GEMINI_API_KEY가 설정되지 않았습니다.' });
@@ -49,6 +26,7 @@ module.exports = async function handler(req, res) {
       '여러 물건을 각각 분리한다. 경계가 애매하면 boundaryUncertain=true로 표시하고 needsReview에 설명한다.',
       '비고를 임의로 다음 물건에 붙이지 않는다. sourceExcerpt에는 해당 물건 판단에 사용한 짧은 원문 구절만 그대로 넣는다.',
       '숫자와 단위는 원문을 보존한다. 계산이나 단위 변환을 하지 않는다.',
+      '반드시 {"items":[{"type":"","name":"","specs":"","qty":"","unit":"","remarks":"","needsReview":[],"boundaryUncertain":false,"sourceExcerpt":""}]} 형태의 JSON 객체를 반환한다.',
       `허용 물건 종류 후보: ${allowedTypes.join(', ') || '제한 없음'}`,
       `허용 단위 후보: ${allowedUnits.join(', ') || '제한 없음'}`,
       '개인정보 마스킹 표시는 결과의 어떤 필드에도 옮기지 않는다.'
@@ -65,8 +43,7 @@ module.exports = async function handler(req, res) {
         contents: [{ role: 'user', parts: [{ text: privacy.maskedText }] }],
         generationConfig: {
           temperature: 0,
-          responseMimeType: 'application/json',
-          responseSchema: ITEM_SCHEMA
+          responseMimeType: 'application/json'
         }
       })
     });
@@ -75,9 +52,20 @@ module.exports = async function handler(req, res) {
     const outputText = (data.candidates?.[0]?.content?.parts || []).map((part) => part.text || '').join('').trim();
     if (!outputText) throw new Error('Gemini가 구조화 결과를 반환하지 않았습니다.');
     const parsed = JSON.parse(outputText);
+    const items = Array.isArray(parsed.items) ? parsed.items.slice(0, 30).map((item) => ({
+      type: String(item?.type || ''),
+      name: String(item?.name || ''),
+      specs: String(item?.specs || ''),
+      qty: item?.qty == null ? '' : String(item.qty),
+      unit: String(item?.unit || ''),
+      remarks: String(item?.remarks || ''),
+      needsReview: Array.isArray(item?.needsReview) ? item.needsReview.slice(0, 10).map(String) : [],
+      boundaryUncertain: item?.boundaryUncertain === true,
+      sourceExcerpt: String(item?.sourceExcerpt || '').slice(0, 300)
+    })) : [];
 
     setJson(res, 200, {
-      items: parsed.items || [],
+      items,
       usage: usageSummary(model, data.usageMetadata || {})
     });
   } catch (error) {
