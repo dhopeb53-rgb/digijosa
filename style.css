@@ -3176,6 +3176,7 @@ input:checked + .slider:before {
 .voice-timer { font-variant-numeric: tabular-nums; font-size: 1.45rem; font-weight: 800; color: #1e293b; }
 .voice-volume-help { min-height: 21px; margin: 7px 0 15px; color: #64748b; font-size: .84rem; }
 .voice-volume-help.is-warning { color: #b45309; font-weight: 700; }
+.voice-live-transcript { min-height: 48px; margin: 0 0 15px; padding: 11px 13px; border: 1px solid #c7d2fe; border-radius: 9px; background: #eef2ff; color: #312e81; text-align: left; font-size: .92rem; line-height: 1.5; }
 .voice-action-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 9px; }
 .voice-action-row-between { justify-content: space-between; margin-top: 17px; }
 .voice-queue-box { margin-top: 14px; padding: 13px; border: 1px dashed #f59e0b; border-radius: 11px; background: #fffbeb; }
